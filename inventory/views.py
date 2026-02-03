@@ -358,7 +358,9 @@ def inventory_dashboard(request):
                     print(f"DEBUG: Before update - is_read: {notification.is_read}")
                     
                     notification.is_read = True
-                    # Update both is_read and updated_at fields
+                    # Manually set the updated_at to current time
+                    from django.utils import timezone
+                    notification.updated_at = timezone.now()
                     notification.save(update_fields=['is_read', 'updated_at'])
                     
                     # Refresh from database to confirm
@@ -681,7 +683,7 @@ def get_product_details(request, product_id):
                 'cost_price': float(product.cost_price),
                 'selling_price': float(product.selling_price),
                 'current_price': float(product.new_price),
-                'abc_classification': product.abc_classification,
+                'abc_classification': product.calculated_abc_classification,
                 'total_stock': product.total_stock,
                 'trend_score': float(product.trend_score),
                 'last_trend_update': product.last_trend_update.isoformat() if product.last_trend_update else None,
@@ -753,10 +755,11 @@ def generate_realistic_trend_score(product):
     else:
         base_score += random.uniform(-0.5, 1.0)  # Normal stock
     
-    # ABC Classification impact
-    if product.abc_classification == 'A':
+    # ABC Classification impact (based on current trend score)
+    calculated_abc = product.calculated_abc_classification
+    if calculated_abc == 'A':
         base_score += random.uniform(0.5, 1.5)  # A-class items higher demand
-    elif product.abc_classification == 'C':
+    elif calculated_abc == 'C':
         base_score += random.uniform(-1.0, 0.5)  # C-class items lower demand
     
     # Seasonal factors
@@ -803,11 +806,12 @@ def enhanced_simulation_ajax_update(request, products):
         else:
             stock_factor = random.uniform(-0.3, 0.3)
         
-        # Factor 2: ABC classification impact
+        # Factor 2: ABC classification impact (based on current trend score)
         abc_factor = 0
-        if product.abc_classification == 'A':
+        calculated_abc = product.calculated_abc_classification
+        if calculated_abc == 'A':
             abc_factor = random.uniform(0.2, 0.8)
-        elif product.abc_classification == 'B':
+        elif calculated_abc == 'B':
             abc_factor = random.uniform(-0.2, 0.4)
         else:
             abc_factor = random.uniform(-0.5, 0.2)
@@ -917,11 +921,12 @@ def enhanced_simulation_update(request, products):
         else:
             stock_factor = random.uniform(-0.3, 0.3)
         
-        # Factor 2: ABC classification impact
+        # Factor 2: ABC classification impact (based on current trend score)
         abc_factor = 0
-        if product.abc_classification == 'A':
+        calculated_abc = product.calculated_abc_classification
+        if calculated_abc == 'A':
             abc_factor = random.uniform(0.2, 0.8)
-        elif product.abc_classification == 'B':
+        elif calculated_abc == 'B':
             abc_factor = random.uniform(-0.2, 0.4)
         else:
             abc_factor = random.uniform(-0.5, 0.2)
@@ -1039,6 +1044,22 @@ def admin_dashboard(request):
                         messages.error(request, f'Discount form error in {field}: {error}')
                 messages.error(request, 'Please check the discount form and try again.')
         
+        elif 'delete_notification' in request.POST:
+            notification_id = request.POST.get('notification_id')
+            if notification_id:
+                try:
+                    notification = Notification.objects.get(id=notification_id)
+                    notification_title = notification.title
+                    notification.delete()
+                    messages.success(request, f'✅ Notification "{notification_title}" deleted successfully!')
+                    return redirect('admin_dashboard')
+                except Notification.DoesNotExist:
+                    messages.error(request, '❌ Notification not found!')
+                except Exception as e:
+                    messages.error(request, f'❌ Error deleting notification: {str(e)}')
+            else:
+                messages.error(request, '❌ No notification ID provided!')
+        
         elif 'send_notification' in request.POST:
             print("DEBUG: Send notification form submitted")
             print(f"DEBUG: All POST data: {dict(request.POST)}")
@@ -1050,7 +1071,6 @@ def admin_dashboard(request):
             admin_recommendation = request.POST.get('admin_recommendation')
             notification_type = request.POST.get('notification_type', 'admin_message')
             priority = request.POST.get('notification_priority', 'medium')
-            send_copy_to_admin = request.POST.get('send_copy_to_admin')
             
             print(f"DEBUG: Extracted data:")
             print(f"  - Product Name: '{product_name}'")
@@ -1059,7 +1079,6 @@ def admin_dashboard(request):
             print(f"  - Recommendation: '{admin_recommendation}'")
             print(f"  - Type: '{notification_type}'")
             print(f"  - Priority: '{priority}'")
-            print(f"  - Send Copy: '{send_copy_to_admin}'")
             
             # Check if all required fields are present
             required_fields = [product_name, product_category, title, admin_recommendation]
@@ -1137,21 +1156,7 @@ Notification Details:
                     ).exists()
                     print(f"DEBUG: Notification found in inventory query: {inventory_check}")
                     
-                    # Create copy for admin if requested
-                    if send_copy_to_admin:
-                        admin_copy = Notification.objects.create(
-                            title=f"COPY: {title}",
-                            message=f"Copy of notification sent to inventory team:\n\n{detailed_message}",
-                            notification_type='admin_message',
-                            priority='low',
-                            target_user_role='admin',
-                            product=product
-                        )
-                        print(f"DEBUG: Admin copy created with ID: {admin_copy.id}")
-                    
                     success_message = f'✅ Detailed notification sent to inventory team!'
-                    if send_copy_to_admin:
-                        success_message += ' Copy saved in admin notifications.'
                     
                     messages.success(request, success_message)
                     print(f"DEBUG: Success message added, redirecting...")
@@ -1174,6 +1179,11 @@ Notification Details:
     
     orders = OrderQueue.objects.all().order_by('-created_at')
     
+    # Count different order statuses
+    pending_orders_count = OrderQueue.objects.filter(status='pending').count()
+    ordered_count = OrderQueue.objects.filter(status='ordered').count()
+    received_count = OrderQueue.objects.filter(status='received').count()
+    
     # Count conditions for dashboard stats
     overstock_count = sum(1 for item in stock_analysis if item['condition'] == 'Overstock')
     reorder_count = sum(1 for item in stock_analysis if item['condition'] == 'Reorder needed')
@@ -1192,7 +1202,16 @@ Notification Details:
         'reorder_count': reorder_count,
         'near_expiry_count': near_expiry_count,
         'expired_count': expired_count,
+        'pending_orders_count': pending_orders_count,
+        'ordered_count': ordered_count,
+        'received_count': received_count,
         'products': Product.objects.all(),  # Add products for notification form
+        'products_json': json.dumps([{
+            'name': product.name,
+            'category': product.category,
+            'stock': product.total_stock,
+            'trendScore': float(product.trend_score)
+        } for product in Product.objects.all()]),
     }
     return render(request, 'admin_dashboard.html', context)
 
@@ -1370,7 +1389,7 @@ def get_product_details(request, product_id):
             'current_price': str(product.new_price),
             'selling_price': str(product.selling_price),
             'cost_price': str(product.cost_price),
-            'abc_classification': product.abc_classification,
+            'abc_classification': product.calculated_abc_classification,
             'trend_score': float(product.trend_score),
             'batches': batches_data
         }
@@ -1383,9 +1402,11 @@ def get_product_details(request, product_id):
 def mark_notification_read(request, notification_id):
     """Mark a notification as read"""
     try:
+        from django.utils import timezone
         notification = Notification.objects.get(id=notification_id)
         notification.is_read = True
-        notification.save()
+        notification.updated_at = timezone.now()
+        notification.save(update_fields=['is_read', 'updated_at'])
         return JsonResponse({'success': True})
     except Notification.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Notification not found'})

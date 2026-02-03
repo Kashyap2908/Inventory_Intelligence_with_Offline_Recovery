@@ -6,7 +6,7 @@
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
-                <i class="fas fa-cube me-2"></i>NeuroStock
+                <i class="fas fa-brain me-2"></i>NeuroStock
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -45,7 +45,7 @@
         <div class="card border-0 shadow-lg bg-gradient-primary text-dark">
             <div class="card-body py-4">
                 <div class="row align-items-center">
-                    <div class="col-md-8">
+                    <div class="col-12">
                         <div class="d-flex align-items-center mb-2">
                             <div class="me-3">
                                 <i class="fas fa-brain fa-3x text-dark opacity-75"></i>
@@ -62,21 +62,6 @@
                                 <i class="fas fa-sync-alt me-2" id="update-icon"></i>
                                 <span id="btn-text">Run Trend Analysis</span>
                             </button>
-                        </div>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <div class="card bg-white bg-opacity-10 border-0">
-                            <div class="card-body text-center">
-                                <h6 class="text-dark-100 mb-1">AI Status</h6>
-                                <div class="d-flex align-items-center justify-content-center mb-2">
-                                    <div class="status-indicator bg-success me-2"></div>
-                                    <span class="fw-bold">Active</span>
-                                </div>
-                                <small class="text-dark-100">
-                                    Last Updated: 
-                                    <span id="last-updated">--:--</span>
-                                </small>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -986,7 +971,7 @@ function showProductDetailsModal(data) {
                                     <tr><td><strong>Cost Price:</strong></td><td>₹${product.cost_price}</td></tr>
                                     <tr><td><strong>Selling Price:</strong></td><td>₹${product.selling_price}</td></tr>
                                     <tr><td><strong>Current Price:</strong></td><td>₹${product.current_price}</td></tr>
-                                    <tr><td><strong>ABC Class:</strong></td><td>${product.abc_classification}</td></tr>
+                                    <tr><td><strong>ABC Class:</strong></td><td>${product.calculated_abc_classification}</td></tr>
                                     <tr><td><strong>Total Stock:</strong></td><td>${product.total_stock} units</td></tr>
                                     <tr><td><strong>Trend Score:</strong></td><td>${product.trend_score.toFixed(1)}/10</td></tr>
                                 </table>

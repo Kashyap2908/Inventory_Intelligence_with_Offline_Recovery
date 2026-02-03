@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load tz %}
 
 {% block title %}Inventory Dashboard - NeuroStock{% endblock %}
 
@@ -6,7 +7,7 @@
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
             <a class="navbar-brand" href="#">
-                <i class="fas fa-cube me-2"></i>NeuroStock
+                <i class="fas fa-brain me-2"></i>NeuroStock
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -56,20 +57,9 @@
 <!-- Header -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <h2 class="mb-1">Inventory Management</h2>
-                <p class="text-muted mb-0">Manage products and stock entries</p>
-            </div>
-            <div class="stats-card">
-                <div class="text-success">
-                    <i class="fas fa-check-circle me-1"></i>System Active
-                </div>
-                <div class="small text-muted">Monitoring enabled</div>
-                <div class="small text-info mt-1">
-                    <i class="fas fa-clock me-1"></i><span id="current-time-inventory">--:--</span>
-                </div>
-            </div>
+        <div>
+            <h2 class="mb-1">Inventory Management</h2>
+            <p class="text-muted mb-0">Manage products and stock entries</p>
         </div>
     </div>
 </div>
@@ -109,10 +99,36 @@
                     <div class="tab-pane fade show active" id="new-notifications" role="tabpanel">
                         {% if notifications %}
                             {% for notification in notifications %}
-                            <div class="notification-item priority-{{ notification.priority }} mb-3 p-3 border rounded" data-notification-id="{{ notification.id }}">
+                            <div class="notification-item priority-{{ notification.priority }} mb-3 p-3 border rounded 
+                                 {% if notification.priority == 'urgent' %}border-danger bg-danger-subtle
+                                 {% elif notification.priority == 'high' %}border-warning bg-warning-subtle
+                                 {% elif notification.priority == 'medium' %}border-info bg-info-subtle
+                                 {% else %}border-secondary bg-light{% endif %}" data-notification-id="{{ notification.id }}">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
-                                        <h6 class="mb-1 text-primary">{{ notification.title }}</h6>
+                                        <h6 class="mb-1 
+                                            {% if notification.priority == 'urgent' %}text-danger
+                                            {% elif notification.priority == 'high' %}text-warning
+                                            {% elif notification.priority == 'medium' %}text-info
+                                            {% else %}text-primary{% endif %}">
+                                            {% if notification.priority == 'urgent' %}
+                                                <i class="fas fa-fire me-1"></i>
+                                            {% elif notification.priority == 'high' %}
+                                                <i class="fas fa-exclamation-triangle me-1"></i>
+                                            {% elif notification.priority == 'medium' %}
+                                                <i class="fas fa-info-circle me-1"></i>
+                                            {% else %}
+                                                <i class="fas fa-bell me-1"></i>
+                                            {% endif %}
+                                            {{ notification.title }}
+                                            <span class="badge ms-2 
+                                                {% if notification.priority == 'urgent' %}bg-danger
+                                                {% elif notification.priority == 'high' %}bg-warning text-dark
+                                                {% elif notification.priority == 'medium' %}bg-info
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ notification.priority|upper }}
+                                            </span>
+                                        </h6>
                                         <p class="mb-2 text-muted">{{ notification.message|linebreaks }}</p>
                                         {% if notification.product %}
                                         <div class="small text-info">
@@ -121,19 +137,13 @@
                                         </div>
                                         {% endif %}
                                         <div class="small text-muted mt-2">
-                                            <i class="fas fa-clock me-1"></i><span class="notification-time" data-created-time="{{ notification.created_at|date:'c' }}">{{ notification.created_at|timesince }} ago</span>
+                                            <i class="fas fa-clock me-1"></i>Sent: <span class="notification-time" data-created-time="{{ notification.created_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, Y H:i" }}{% endtimezone %}</span>
                                         </div>
                                     </div>
                                     <div class="text-end">
                                         <button class="btn btn-sm btn-success mark-read-btn" data-notification-id="{{ notification.id }}" title="Mark as read">
                                             <i class="fas fa-check"></i>
                                         </button>
-                                        {% if notification.product %}
-                                        <button class="btn btn-sm btn-outline-primary ms-1" data-product-id="{{ notification.product.id }}" 
-                                                onclick="viewProductDetails(this.getAttribute('data-product-id'))" title="View product">
-                                            <i class="fas fa-eye"></i>
-                                        </button>
-                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
@@ -151,11 +161,23 @@
                     <div class="tab-pane fade" id="notification-history" role="tabpanel">
                         {% if read_notifications %}
                             {% for notification in read_notifications %}
-                            <div class="notification-item-read mb-3 p-3 border rounded bg-light">
+                            <div class="notification-item-read mb-3 p-3 border rounded 
+                                 {% if notification.priority == 'urgent' %}border-danger bg-danger-subtle
+                                 {% elif notification.priority == 'high' %}border-warning bg-warning-subtle
+                                 {% elif notification.priority == 'medium' %}border-info bg-info-subtle
+                                 {% else %}border-secondary bg-light{% endif %}">
                                 <div class="d-flex justify-content-between align-items-start">
                                     <div class="flex-grow-1">
                                         <h6 class="mb-1 text-muted">
-                                            <i class="fas fa-check-circle text-success me-1"></i>{{ notification.title }}
+                                            <i class="fas fa-check-circle text-success me-1"></i>
+                                            {{ notification.title }}
+                                            <span class="badge ms-2 
+                                                {% if notification.priority == 'urgent' %}bg-danger
+                                                {% elif notification.priority == 'high' %}bg-warning text-dark
+                                                {% elif notification.priority == 'medium' %}bg-info
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ notification.priority|upper }}
+                                            </span>
                                         </h6>
                                         <p class="mb-2 text-muted small">{{ notification.message|linebreaks }}</p>
                                         {% if notification.product %}
@@ -164,8 +186,8 @@
                                         </div>
                                         {% endif %}
                                         <div class="small text-muted mt-2">
-                                            <i class="fas fa-clock me-1"></i>Received: <span class="notification-received-time" data-created-time="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"M d, Y H:i" }}</span>
-                                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: <span class="notification-read-time" data-read-time="{{ notification.safe_updated_at|date:'c' }}">{{ notification.safe_updated_at|date:"M d, Y H:i" }}</span></span>
+                                            <i class="fas fa-clock me-1"></i>Sent: <span class="notification-received-time" data-created-time="{{ notification.created_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, Y H:i" }}{% endtimezone %}</span>
+                                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: <span class="notification-read-time" data-read-time="{{ notification.safe_updated_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.safe_updated_at|date:"M d, Y H:i" }}{% endtimezone %}</span></span>
                                         </div>
                                     </div>
                                     <div class="text-end">
@@ -215,10 +237,6 @@
                             {{ product_form.selling_price.label_tag }}
                             {{ product_form.selling_price }}
                         </div>
-                    </div>
-                    <div class="mb-3">
-                        {{ product_form.abc_classification.label_tag }}
-                        {{ product_form.abc_classification }}
                     </div>
                     <button type="submit" name="add_product" class="btn btn-primary">
                         <i class="fas fa-plus me-1"></i>Add Product
@@ -276,7 +294,6 @@
                                 <th>Current Price</th>
                                 <th>Class</th>
                                 <th>Stock</th>
-                                <th>Trend Score</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -288,20 +305,15 @@
                                 <td>₹{{ product.selling_price }}</td>
                                 <td><strong>₹{{ product.new_price }}</strong></td>
                                 <td>
-                                    <span class="badge bg-{% if product.abc_classification == 'A' %}danger{% elif product.abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
-                                        {{ product.abc_classification }}
+                                    <span class="badge bg-{% if product.calculated_abc_classification == 'A' %}danger{% elif product.calculated_abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
+                                        {{ product.calculated_abc_classification }}
                                     </span>
                                 </td>
                                 <td>{{ product.total_stock }}</td>
-                                <td>
-                                    <span class="badge bg-{% if product.trend_score >= 7 %}success{% elif product.trend_score >= 4 %}warning{% else %}danger{% endif %}">
-                                        {{ product.trend_score|floatformat:1 }}/10
-                                    </span>
-                                </td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="8" class="text-center text-muted">No products available</td>
+                                <td colspan="7" class="text-center text-muted">No products available</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -336,7 +348,7 @@
                                 <td>{{ stock.product.name }}</td>
                                 <td>{{ stock.quantity }} units</td>
                                 <td>{{ stock.expiry_date }}</td>
-                                <td>{{ stock.created_at|date:"M d, Y" }}</td>
+                                <td>{% timezone "Asia/Kolkata" %}{{ stock.created_at|date:"M d, Y" }}{% endtimezone %}</td>
                             </tr>
                             {% empty %}
                             <tr>
@@ -368,38 +380,6 @@ function updateInventoryTime() {
     if (currentTimeElement) {
         currentTimeElement.textContent = timeString;
     }
-    
-    // Update notification relative times
-    updateNotificationTimes();
-}
-
-function updateNotificationTimes() {
-    const now = new Date();
-    
-    // Update notification times
-    document.querySelectorAll('.notification-time').forEach(element => {
-        const createdTime = element.getAttribute('data-created-time');
-        if (createdTime) {
-            const createdDate = new Date(createdTime);
-            const diffMs = now - createdDate;
-            const diffMinutes = Math.floor(diffMs / (1000 * 60));
-            const diffHours = Math.floor(diffMinutes / 60);
-            const diffDays = Math.floor(diffHours / 24);
-            
-            let relativeText = '';
-            if (diffMinutes < 1) {
-                relativeText = 'just now';
-            } else if (diffMinutes < 60) {
-                relativeText = `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
-            } else if (diffHours < 24) {
-                relativeText = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
-            } else {
-                relativeText = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-            }
-            
-            element.textContent = relativeText;
-        }
-    });
 }
 
 // Initialize inventory time updates
@@ -421,49 +401,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (panel) {
             panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
-    };
-    
-    window.viewProductDetails = function(productId) {
-        console.log('👁 Eye icon clicked for product:', productId);
-        
-        // Fetch product details via AJAX
-        fetch(`/product-details/${productId}/`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-                
-                const product = data.product;
-                const batches = data.recent_stock || [];
-                
-                let batchInfo = '';
-                if (batches.length > 0) {
-                    batchInfo = '\n\nStock Batches (FEFO Order):';
-                    batches.forEach((batch, index) => {
-                        batchInfo += `\n${index + 1}. ${batch.quantity} units - Expires: ${batch.expiry_date}`;
-                    });
-                } else {
-                    batchInfo = '\n\nNo stock batches available';
-                }
-                
-                const details = `Product Details:
-• Name: ${product.name}
-• Category: ${product.category}
-• Current Stock: ${product.total_stock} units
-• Current Price: ₹${product.current_price}
-• Selling Price: ₹${product.selling_price}
-• Cost Price: ₹${product.cost_price}
-• ABC Classification: ${product.abc_classification}
-• Trend Score: ${product.trend_score}/10${batchInfo}`;
-                
-                alert(details);
-            })
-            .catch(error => {
-                console.error('Error fetching product details:', error);
-                alert('Error loading product details. Please try again.');
-            });
     };
     
     // Initialize notification buttons when DOM is ready
@@ -531,24 +468,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     console.log('📊 Response data:', data);
                     
                     if (data.success) {
-                        console.log('✅ Success! Hiding notification...');
+                        console.log('✅ Success! Moving notification to history...');
                         
-                        // Find and hide the notification item
+                        // Find the notification item
                         const notificationItem = this.closest('.notification-item');
                         if (notificationItem) {
+                            // Get notification data before removing
+                            const notificationData = {
+                                id: notificationId,
+                                title: notificationItem.querySelector('h6').textContent,
+                                message: notificationItem.querySelector('p').textContent,
+                                sentTime: notificationItem.querySelector('.notification-time').textContent.replace('Sent: ', ''),
+                                priority: notificationItem.classList.contains('priority-urgent') ? 'urgent' :
+                                         notificationItem.classList.contains('priority-high') ? 'high' :
+                                         notificationItem.classList.contains('priority-medium') ? 'medium' : 'low'
+                            };
+                            
                             // Smooth fade out animation
                             notificationItem.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
                             notificationItem.style.opacity = '0';
                             notificationItem.style.transform = 'translateX(100%)';
                             
                             setTimeout(() => {
-                                notificationItem.style.display = 'none';
+                                // Remove from new notifications
+                                notificationItem.remove();
+                                
+                                // Add to history tab
+                                addToNotificationHistory(notificationData);
                                 
                                 // Update notification badge count
                                 updateNotificationBadge();
                                 
                                 // Show success message
-                                showSuccessMessage('✅ Notification marked as read!');
+                                showSuccessMessage('✅ Notification moved to history!');
                                 
                             }, 500);
                         }
@@ -575,23 +527,117 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ All notification buttons initialized!');
     }
     
+    // Helper function to add notification to history tab
+    function addToNotificationHistory(notificationData) {
+        const historyTab = document.querySelector('#notification-history');
+        if (historyTab) {
+            // Get current IST time
+            const now = new Date();
+            const istTime = new Date(now.getTime() + (5.5 * 60 * 60 * 1000)); // Add 5.5 hours for IST
+            const currentTime = istTime.toLocaleString('en-US', {
+                month: 'short',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: 'Asia/Kolkata'
+            });
+            
+            // Create history item HTML with priority colors
+            const priorityClasses = {
+                'urgent': 'border-danger bg-danger-subtle',
+                'high': 'border-warning bg-warning-subtle', 
+                'medium': 'border-info bg-info-subtle',
+                'low': 'border-secondary bg-light'
+            };
+            
+            const priorityBadges = {
+                'urgent': 'bg-danger',
+                'high': 'bg-warning text-dark',
+                'medium': 'bg-info',
+                'low': 'bg-secondary'
+            };
+            
+            const historyItem = document.createElement('div');
+            historyItem.className = `notification-item-read mb-3 p-3 border rounded ${priorityClasses[notificationData.priority] || 'border-secondary bg-light'}`;
+            historyItem.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1 text-muted">
+                            <i class="fas fa-check-circle text-success me-1"></i>${notificationData.title}
+                            <span class="badge ms-2 ${priorityBadges[notificationData.priority] || 'bg-secondary'}">
+                                ${notificationData.priority.toUpperCase()}
+                            </span>
+                        </h6>
+                        <p class="mb-2 text-muted small">${notificationData.message}</p>
+                        <div class="small text-muted mt-2">
+                            <i class="fas fa-clock me-1"></i>Sent: ${notificationData.sentTime}
+                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: ${currentTime}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge bg-success">Read</span>
+                    </div>
+                </div>
+            `;
+            
+            // Add to top of history tab
+            const existingItems = historyTab.querySelectorAll('.notification-item-read');
+            if (existingItems.length > 0) {
+                historyTab.insertBefore(historyItem, existingItems[0]);
+            } else {
+                // Replace the "no history" message
+                const noHistoryMsg = historyTab.querySelector('.text-center.py-4');
+                if (noHistoryMsg) {
+                    noHistoryMsg.remove();
+                }
+                historyTab.appendChild(historyItem);
+            }
+            
+            // Update history tab count
+            const historyTabButton = document.querySelector('#history-tab');
+            if (historyTabButton) {
+                const currentHistoryCount = historyTab.querySelectorAll('.notification-item-read').length;
+                historyTabButton.innerHTML = `<i class="fas fa-history me-1"></i>History (${currentHistoryCount})`;
+            }
+        }
+    }
+    
     // Helper function to update notification badge
     function updateNotificationBadge() {
         const badge = document.querySelector('.position-absolute.badge.bg-danger');
+        const newTab = document.querySelector('#new-tab');
+        
+        // Count visible notifications in new tab
+        const visibleNotifications = document.querySelectorAll('#new-notifications .notification-item:not([style*="display: none"])').length;
+        
         if (badge) {
-            const currentCount = parseInt(badge.textContent) || 0;
-            if (currentCount > 1) {
-                badge.textContent = currentCount - 1;
+            if (visibleNotifications > 0) {
+                badge.textContent = visibleNotifications;
+                badge.style.display = 'block';
             } else {
                 badge.style.display = 'none';
             }
         }
         
-        // Update tab counts
-        const newTab = document.querySelector('#new-tab');
+        // Update new tab count
         if (newTab) {
-            const visibleNotifications = document.querySelectorAll('.notification-item:not([style*="display: none"])').length;
             newTab.innerHTML = `<i class="fas fa-bell me-1"></i>New Notifications (${visibleNotifications})`;
+        }
+        
+        // Show "no notifications" message if needed
+        if (visibleNotifications === 0) {
+            const newNotificationsTab = document.querySelector('#new-notifications');
+            if (newNotificationsTab && !newNotificationsTab.querySelector('.text-center.py-4')) {
+                newNotificationsTab.innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No new notifications</h5>
+                        <p class="text-muted">You're all caught up!</p>
+                    </div>
+                `;
+            }
         }
     }
     
@@ -628,26 +674,66 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* Notification styling */
+/* Notification styling with priority colors */
 .notification-item {
     transition: all 0.3s ease;
-    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     border-left: 4px solid #007bff;
-}
-
-.notification-item.priority-high {
-    border-left-color: #fd7e14;
-    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
 }
 
 .notification-item.priority-urgent {
     border-left-color: #dc3545;
-    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+}
+
+.notification-item.priority-urgent:hover {
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.notification-item.priority-high {
+    border-left-color: #fd7e14;
+    box-shadow: 0 2px 8px rgba(253, 126, 20, 0.2);
+}
+
+.notification-item.priority-high:hover {
+    box-shadow: 0 4px 12px rgba(253, 126, 20, 0.3);
+}
+
+.notification-item.priority-medium {
+    border-left-color: #0dcaf0;
+    box-shadow: 0 2px 8px rgba(13, 202, 240, 0.2);
+}
+
+.notification-item.priority-medium:hover {
+    box-shadow: 0 4px 12px rgba(13, 202, 240, 0.3);
+}
+
+.notification-item.priority-low {
+    border-left-color: #6c757d;
 }
 
 .notification-item:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Priority badge animations */
+.badge {
+    animation: pulse-priority 2s infinite;
+}
+
+@keyframes pulse-priority {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Urgent notifications get special attention */
+.notification-item.priority-urgent .badge {
+    animation: urgent-blink 1.5s infinite;
+}
+
+@keyframes urgent-blink {
+    0%, 50% { opacity: 1; }
+    25%, 75% { opacity: 0.7; }
 }
 
 .nav-link .badge {
@@ -673,11 +759,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .mark-read-btn:disabled {
     opacity: 0.6;
     transform: none;
-}
-
-/* Eye icon button styling */
-.btn-outline-primary:hover {
-    transform: scale(1.05);
 }
 
 /* Success message styling */

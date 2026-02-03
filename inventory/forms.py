@@ -74,13 +74,12 @@ class SignUpForm(UserCreationForm):
 class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
-        fields = ['name', 'category', 'cost_price', 'selling_price', 'abc_classification']
+        fields = ['name', 'category', 'cost_price', 'selling_price']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.TextInput(attrs={'class': 'form-control'}),
             'cost_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'selling_price': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'abc_classification': forms.Select(attrs={'class': 'form-control'}),
         }
 
 class StockEntryForm(forms.ModelForm):

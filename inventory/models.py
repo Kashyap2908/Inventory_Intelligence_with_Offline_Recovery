@@ -67,6 +67,16 @@ class Product(models.Model):
         if nearest:
             return (nearest.expiry_date - date.today()).days
         return None
+    
+    @property
+    def calculated_abc_classification(self):
+        """Calculate ABC classification based on trend score"""
+        if self.trend_score >= 7.0:
+            return 'A'
+        elif self.trend_score >= 4.0:
+            return 'B'
+        else:
+            return 'C'
 
 class ExpiryStock(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)

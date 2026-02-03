@@ -8,9 +8,13 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'cost_price', 'selling_price', 'new_price', 'abc_classification', 'trend_score']
-    list_filter = ['abc_classification', 'category']
+    list_display = ['name', 'category', 'cost_price', 'selling_price', 'new_price', 'calculated_abc_class', 'trend_score']
+    list_filter = ['category']
     search_fields = ['name', 'category']
+    
+    def calculated_abc_class(self, obj):
+        return obj.calculated_abc_classification
+    calculated_abc_class.short_description = 'ABC Class'
 
 @admin.register(ExpiryStock)
 class ExpiryStockAdmin(admin.ModelAdmin):
