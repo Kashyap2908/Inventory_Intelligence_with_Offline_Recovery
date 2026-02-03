@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NeuroStock - Smart Inventory Management{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% load static %}
+    <link href="{% static 'css/professional.css' %}" rel="stylesheet">
+</head>
+<body>
+    {% block nav %}
+    {% endblock %}
+
+    <div class="container-fluid px-4 py-3">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% block content %}
+        {% endblock %}
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Product Autocomplete JavaScript -->
+    <script>
+    // Product Autocomplete Functionality
+    class ProductAutocomplete {
+        constructor(inputElement) {
+            this.input = inputElement;
+            this.dropdown = null;
+            this.selectedProductId = null;
+            this.debounceTimer = null;
+            this.init();
+        }
+        
+        init() {
+            this.createDropdown();
+            this.bindEvents();
+        }
+        
+        createDropdown() {
+            this.dropdown = document.createElement('div');
+            this.dropdown.className = 'product-autocomplete-dropdown';
+            this.dropdown.style.cssText = `
+                position: absolute;
+                top: 100%;
+                left: 0;
+                right: 0;
+                background: white;
+                border: 1px solid #ddd;
+                border-top: none;
+                border-radius: 0 0 4px 4px;
+                max-height: 200px;
+                overflow-y: auto;
+                z-index: 1000;
+                display: none;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            `;
+            
+            // Make input container relative
+            this.input.parentElement.style.position = 'relative';
+            this.input.parentElement.appendChild(this.dropdown);
+        }
+        
+        bindEvents() {
+            this.input.addEventListener('input', (e) => {
+                clearTimeout(this.debounceTimer);
+                this.debounceTimer = setTimeout(() => {
+                    this.search(e.target.value);
+                }, 300);
+            });
+            
+            this.input.addEventListener('focus', (e) => {
+                if (e.target.value.length > 0) {
+                    this.search(e.target.value);
+                }
+            });
+            
+            this.input.addEventListener('blur', (e) => {
+                // Delay hiding to allow click on dropdown
+                setTimeout(() => {
+                    this.hideDropdown();
+                }, 150);
+            });
+            
+            // Handle keyboard navigation
+            this.input.addEventListener('keydown', (e) => {
+                const items = this.dropdown.querySelectorAll('.autocomplete-item');
+                const activeItem = this.dropdown.querySelector('.autocomplete-item.active');
+                
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (activeItem) {
+                        activeItem.classList.remove('active');
+                        const next = activeItem.nextElementSibling;
+                        if (next) {
+                            next.classList.add('active');
+                        } else {
+                            items[0]?.classList.add('active');
+                        }
+                    } else {
+                        items[0]?.classList.add('active');
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (activeItem) {
+                        activeItem.classList.remove('active');
+                        const prev = activeItem.previousElementSibling;
+                        if (prev) {
+                            prev.classList.add('active');
+                        } else {
+                            items[items.length - 1]?.classList.add('active');
+                        }
+                    } else {
+                        items[items.length - 1]?.classList.add('active');
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (activeItem) {
+                        this.selectProduct(activeItem);
+                    }
+                } else if (e.key === 'Escape') {
+                    this.hideDropdown();
+                }
+            });
+        }
+        
+        search(query) {
+            if (query.length < 1) {
+                this.hideDropdown();
+                return;
+            }
+            
+            fetch(`/api/search-products/?q=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    this.showResults(data.products);
+                })
+                .catch(error => {
+                    console.error('Search error:', error);
+                    this.hideDropdown();
+                });
+        }
+        
+        showResults(products) {
+            if (products.length === 0) {
+                this.dropdown.innerHTML = '<div class="autocomplete-item text-muted p-2">No products found</div>';
+                this.dropdown.style.display = 'block';
+                return;
+            }
+            
+            this.dropdown.innerHTML = products.map(product => `
+                <div class="autocomplete-item" data-product-id="${product.id}" data-product-name="${product.name}">
+                    <div class="d-flex justify-content-between align-items-center p-2" style="cursor: pointer;">
+                        <div>
+                            <div class="fw-bold text-primary">${product.name}</div>
+                            <div class="small text-muted">${product.category}</div>
+                        </div>
+                        <div class="text-end">
+                            <div class="small text-success">Stock: ${product.stock}</div>
+                            <div class="small text-info">₹${product.price}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Add click handlers
+            this.dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
+                if (!item.classList.contains('text-muted')) {
+                    item.addEventListener('click', () => {
+                        this.selectProduct(item);
+                    });
+                    
+                    item.addEventListener('mouseenter', () => {
+                        this.dropdown.querySelectorAll('.autocomplete-item').forEach(i => i.classList.remove('active'));
+                        item.classList.add('active');
+                    });
+                }
+            });
+            
+            this.dropdown.style.display = 'block';
+        }
+        
+        selectProduct(item) {
+            const productName = item.getAttribute('data-product-name');
+            const productId = item.getAttribute('data-product-id');
+            
+            this.input.value = productName;
+            this.selectedProductId = productId;
+            this.hideDropdown();
+            
+            // Trigger change event for other scripts
+            this.input.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Add visual feedback
+            this.input.style.borderColor = '#28a745';
+            setTimeout(() => {
+                this.input.style.borderColor = '';
+            }, 1000);
+        }
+        
+        hideDropdown() {
+            this.dropdown.style.display = 'none';
+        }
+    }
+    
+    // Initialize autocomplete on all product input fields
+    function initializeProductAutocomplete() {
+        document.querySelectorAll('.product-autocomplete').forEach(input => {
+            if (!input.hasAttribute('data-autocomplete-initialized')) {
+                new ProductAutocomplete(input);
+                input.setAttribute('data-autocomplete-initialized', 'true');
+            }
+        });
+    }
+    
+    // Initialize when DOM is ready, but don't interfere with other scripts
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeProductAutocomplete);
+    } else {
+        initializeProductAutocomplete();
+    }
+    
+    // Also initialize when new elements are added dynamically
+    window.initializeProductAutocomplete = initializeProductAutocomplete;
+    
+    // Add CSS for autocomplete
+    const style = document.createElement('style');
+    style.textContent = `
+        .autocomplete-item:hover,
+        .autocomplete-item.active {
+            background-color: #f8f9fa;
+        }
+        
+        .autocomplete-item.active {
+            background-color: #e3f2fd !important;
+        }
+        
+        .product-autocomplete {
+            position: relative;
+        }
+        
+        .product-autocomplete-dropdown {
+            font-size: 14px;
+        }
+    `;
+    document.head.appendChild(style);
+    </script>
+    
+    {% block scripts %}
+    {% endblock %}
+</body>
+</html>

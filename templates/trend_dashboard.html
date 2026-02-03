@@ -1,0 +1,1253 @@
+{% extends 'base.html' %}
+
+{% block title %}AI Market Trend Intelligence - NeuroStock{% endblock %}
+
+{% block nav %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cube me-2"></i>NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                            <i class="fas fa-chart-line me-1"></i>Trends
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<!-- CSRF Token for AJAX requests -->
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+<!-- AI Market Trend Intelligence Engine Header -->
+<div class="row mb-4">
+    <div class="col-12" >
+        <div class="card border-0 shadow-lg bg-gradient-primary text-dark">
+            <div class="card-body py-4">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <div class="d-flex align-items-center mb-2">
+                            <div class="me-3">
+                                <i class="fas fa-brain fa-3x text-dark opacity-75"></i>
+                            </div>
+                            <div>
+                                <h1 class="mb-1 fw-bold">AI Market Trend Intelligence Engine</h1>
+                                <p class="mb-0 fs-5 opacity-45">
+                                    📌 Real-time demand forecasting and pricing recommendations
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-light btn-lg px-4" id="update-btn" onclick="startTrendAnalysis()">
+                                <i class="fas fa-sync-alt me-2" id="update-icon"></i>
+                                <span id="btn-text">Run Trend Analysis</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <div class="card bg-white bg-opacity-10 border-0">
+                            <div class="card-body text-center">
+                                <h6 class="text-dark-100 mb-1">AI Status</h6>
+                                <div class="d-flex align-items-center justify-content-center mb-2">
+                                    <div class="status-indicator bg-success me-2"></div>
+                                    <span class="fw-bold">Active</span>
+                                </div>
+                                <small class="text-dark-100">
+                                    Last Updated: 
+                                    <span id="last-updated">--:--</span>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mini KPI Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="kpi-icon bg-success bg-opacity-10 text-success">
+                        <i class="fas fa-trending-up"></i>
+                    </div>
+                    <div class="text-end">
+                        <h3 class="mb-0 text-success fw-bold">{{ high_demand_count|default:0 }}</h3>
+                        <small class="text-muted">Products</small>
+                    </div>
+                </div>
+                <h6 class="mb-1 text-success">High Demand</h6>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar bg-success" id="high-demand-progress"></div>
+                </div>
+                <small class="text-muted">Trend Score ≥ 7.0</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="kpi-icon bg-danger bg-opacity-10 text-danger">
+                        <i class="fas fa-trending-down"></i>
+                    </div>
+                    <div class="text-end">
+                        <h3 class="mb-0 text-danger fw-bold">{{ low_demand_count|default:0 }}</h3>
+                        <small class="text-muted">Products</small>
+                    </div>
+                </div>
+                <h6 class="mb-1 text-danger">Low Demand</h6>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar bg-danger" id="low-demand-progress"></div>
+                </div>
+                <small class="text-muted">Trend Score < 4.0</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="kpi-icon bg-warning bg-opacity-10 text-warning">
+                        <i class="fas fa-tags"></i>
+                    </div>
+                    <div class="text-end">
+                        <h3 class="mb-0 text-warning fw-bold">{{ price_actions_count|default:4 }}</h3>
+                        <small class="text-muted">Actions</small>
+                    </div>
+                </div>
+                <h6 class="mb-1 text-warning">Price Actions</h6>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar bg-warning" id="price-actions-progress" style="width: 60%;"></div>
+                </div>
+                <small class="text-muted">Recommended</small>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="kpi-icon bg-info bg-opacity-10 text-info">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                    <div class="text-end">
+                        <h3 class="mb-0 text-info fw-bold" id="current-time-display">--:--</h3>
+                        <small class="text-muted">Current</small>
+                    </div>
+                </div>
+                <h6 class="mb-1 text-info">Real-Time</h6>
+                <div class="progress" style="height: 4px;">
+                    <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 100%;"></div>
+                </div>
+                <small class="text-muted">Live Analysis</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Products Analysis Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white border-0 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1 fw-bold">
+                            <i class="fas fa-chart-line text-primary me-2"></i>
+                            Product Trend Analysis
+                        </h5>
+                        <small class="text-muted">AI-powered market intelligence and demand forecasting</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <span class="badge bg-success me-1">
+                                <i class="fas fa-robot me-1"></i>AI Active
+                            </span>
+                            <span class="badge bg-info">
+                                <i class="fas fa-database me-1"></i>Real-time
+                            </span>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" onclick="refreshAnalysis()">
+                            <i class="fas fa-refresh me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="border-0 fw-bold">Product</th>
+                                <th class="border-0 fw-bold">Category</th>
+                                <th class="border-0 fw-bold">Stock Level</th>
+                                <th class="border-0 fw-bold">Trend Score</th>
+                                <th class="border-0 fw-bold">Market Status</th>
+                                <th class="border-0 fw-bold">AI Recommendation</th>
+
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr class="trend-row" data-trend-score="{{ product.trend_score }}" data-product-id="{{ product.id }}">
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="product-avatar me-2">
+                                            <i class="fas fa-box text-primary"></i>
+                                        </div>
+                                        <div>
+                                            <div class="fw-bold">{{ product.name }}</div>
+                                            <small class="text-muted">ID: #{{ product.id }}</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge bg-light text-dark">{{ product.category }}</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="stock-indicator me-2" data-stock="{{ product.total_stock }}"></div>
+                                        <div>
+                                            <div class="fw-bold">{{ product.total_stock }}</div>
+                                            <small class="text-muted">units</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="trend-score-container">
+                                        <div class="d-flex align-items-center mb-1">
+                                            <span class="fw-bold trend-score-text" data-trend-score="{{ product.trend_score }}">
+                                                {{ product.trend_score|floatformat:1 }}/10
+                                            </span>
+                                        </div>
+                                        <small class="text-muted">
+                                            <span class="update-time-display" data-update-time="{% if product.last_trend_update %}{{ product.last_trend_update|date:'c' }}{% endif %}">
+                                                {% if product.last_trend_update %}
+                                                    Updated {{ product.last_trend_update|timesince }} ago
+                                                {% else %}
+                                                    Not analyzed yet
+                                                {% endif %}
+                                            </span>
+                                        </small>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if product.trend_score >= 7 %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-fire me-1"></i>High Demand
+                                        </span>
+                                    {% elif product.trend_score >= 4 %}
+                                        <span class="badge bg-warning">
+                                            <i class="fas fa-minus me-1"></i>Moderate
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-danger">
+                                            <i class="fas fa-arrow-down me-1"></i>Low Demand
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="recommendation-cell">
+                                        {% if product.trend_score >= 7 and product.total_stock < 100 %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-arrow-up text-success me-1"></i>
+                                                <strong>Increase Stock</strong>
+                                            </div>
+                                            <small class="text-muted">High demand, low inventory</small>
+                                        {% elif product.trend_score >= 7 and product.total_stock >= 100 %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-dollar-sign text-success me-1"></i>
+                                                <strong>Raise Price</strong>
+                                            </div>
+                                            <small class="text-muted">High demand, good stock</small>
+                                        {% elif product.trend_score < 3 and product.total_stock > 150 %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-percentage text-danger me-1"></i>
+                                                <strong>Apply Discount</strong>
+                                            </div>
+                                            <small class="text-muted">Low demand, overstock</small>
+                                        {% elif product.trend_score < 3 %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-pause text-warning me-1"></i>
+                                                <strong>Reduce Orders</strong>
+                                            </div>
+                                            <small class="text-muted">Low demand detected</small>
+                                        {% elif product.total_stock < 50 %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-shopping-cart text-info me-1"></i>
+                                                <strong>Reorder Soon</strong>
+                                            </div>
+                                            <small class="text-muted">Stock running low</small>
+                                        {% else %}
+                                            <div class="recommendation-item">
+                                                <i class="fas fa-eye text-muted me-1"></i>
+                                                <strong>Monitor</strong>
+                                            </div>
+                                            <small class="text-muted">Stable conditions</small>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                                
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5">
+                                    <div class="text-muted">
+                                        <i class="fas fa-chart-line fa-3x mb-3 opacity-50"></i>
+                                        <h5>No products available for trend analysis</h5>
+                                        <p>Add products to start AI-powered trend analysis</p>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Enhanced real-time functionality for AI Market Trend Intelligence Engine
+function updateCurrentTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    const dateString = now.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+    });
+    
+    // Update KPI card time display
+    const currentTimeDisplay = document.getElementById('current-time-display');
+    if (currentTimeDisplay) {
+        currentTimeDisplay.textContent = timeString;
+    }
+    
+    // Update last updated time
+    const lastUpdated = document.getElementById('last-updated');
+    if (lastUpdated) {
+        lastUpdated.textContent = `${dateString}, ${timeString}`;
+    }
+    
+    // Update all relative time displays
+    updateRelativeTimes();
+}
+
+function updateRelativeTimes() {
+    const now = new Date();
+    const timeDisplays = document.querySelectorAll('.update-time-display');
+    
+    timeDisplays.forEach(display => {
+        const updateTimeStr = display.getAttribute('data-update-time');
+        if (updateTimeStr) {
+            const updateTime = new Date(updateTimeStr);
+            const diffMs = now - updateTime;
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMinutes / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            let relativeText = '';
+            if (diffMinutes < 1) {
+                relativeText = 'Updated just now';
+            } else if (diffMinutes < 60) {
+                relativeText = `Updated ${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+            } else if (diffHours < 24) {
+                relativeText = `Updated ${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+            } else {
+                relativeText = `Updated ${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+            }
+            
+            display.textContent = relativeText;
+        } else {
+            display.textContent = 'Not analyzed yet';
+        }
+    });
+}
+
+// Initialize trend analysis dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Trend dashboard loaded successfully');
+    
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000);
+    
+    // Set up trend score visualizations
+    setupTrendScoreVisuals();
+    
+    // Set up KPI progress bars
+    setupKPIProgressBars();
+    
+    // Set up stock level indicators
+    setupStockIndicators();
+    
+    console.log('✅ Dashboard initialization complete');
+});
+
+function setupTrendScoreVisuals() {
+    // Progress bars in trend score column
+    const progressBars = document.querySelectorAll('.progress-bar[data-trend-score]');
+    const trendScoreTexts = document.querySelectorAll('.trend-score-text[data-trend-score]');
+    
+    progressBars.forEach(bar => {
+        const score = parseFloat(bar.getAttribute('data-trend-score'));
+        bar.style.width = (score * 10) + '%';
+        
+        if (score >= 7) {
+            bar.classList.add('bg-success');
+        } else if (score >= 4) {
+            bar.classList.add('bg-warning');
+        } else {
+            bar.classList.add('bg-danger');
+        }
+    });
+    
+    trendScoreTexts.forEach(text => {
+        const score = parseFloat(text.getAttribute('data-trend-score'));
+        if (score >= 7) {
+            text.classList.add('text-success');
+        } else if (score >= 4) {
+            text.classList.add('text-warning');
+        } else {
+            text.classList.add('text-danger');
+        }
+    });
+}
+
+function setupKPIProgressBars() {
+    // Calculate percentages for KPI cards
+    const trendRows = document.querySelectorAll('.trend-row');
+    const totalProducts = trendRows.length;
+    
+    let highDemandCount = 0;
+    let lowDemandCount = 0;
+    
+    trendRows.forEach(row => {
+        const score = parseFloat(row.getAttribute('data-trend-score'));
+        if (score >= 7) highDemandCount++;
+        if (score < 4) lowDemandCount++;
+    });
+    
+    const highPercentage = totalProducts > 0 ? (highDemandCount / totalProducts) * 100 : 0;
+    const lowPercentage = totalProducts > 0 ? (lowDemandCount / totalProducts) * 100 : 0;
+    
+    const highProgress = document.getElementById('high-demand-progress');
+    const lowProgress = document.getElementById('low-demand-progress');
+    
+    if (highProgress) highProgress.style.width = highPercentage + '%';
+    if (lowProgress) lowProgress.style.width = lowPercentage + '%';
+}
+
+function setupStockIndicators() {
+    // Stock level indicators
+    const stockIndicators = document.querySelectorAll('.stock-indicator');
+    
+    stockIndicators.forEach(indicator => {
+        const stock = parseInt(indicator.getAttribute('data-stock'));
+        
+        if (stock < 50) {
+            indicator.innerHTML = '<i class="fas fa-circle text-danger"></i>';
+            indicator.title = 'Low Stock';
+        } else if (stock < 100) {
+            indicator.innerHTML = '<i class="fas fa-circle text-warning"></i>';
+            indicator.title = 'Medium Stock';
+        } else {
+            indicator.innerHTML = '<i class="fas fa-circle text-success"></i>';
+            indicator.title = 'Good Stock';
+        }
+    });
+}
+
+function setupTrendUpdateForm() {
+    // Remove old form-based setup since we're using AJAX now
+}
+
+// Simple function to start trend analysis
+function startTrendAnalysis() {
+    console.log('🎯 Trend Analysis button clicked!');
+    
+    // Call the main function
+    runTrendAnalysis();
+}
+
+// Real-time trend analysis function
+function runTrendAnalysis() {
+    try {
+        console.log('🚀 Starting Real-Time Trend Analysis...');
+        
+        const button = document.getElementById('update-btn');
+        const btnText = document.getElementById('btn-text');
+        const icon = document.getElementById('update-icon');
+        
+        console.log('📋 Elements found:', { button, btnText, icon });
+        
+        if (!button) {
+            console.error('❌ Button element not found!');
+            alert('Error: Button element not found!');
+            return;
+        }
+        
+        // Disable button and show loading state
+        button.disabled = true;
+        if (btnText) btnText.textContent = 'Analyzing Market Trends...';
+        if (icon) icon.className = 'fas fa-spinner fa-spin me-2';
+        
+        // Show analysis overlay
+        try {
+            showAnalysisOverlay();
+        } catch (overlayError) {
+            console.error('❌ Error showing overlay:', overlayError);
+        }
+        
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        console.log('🔐 CSRF Token:', csrfToken ? 'Found' : 'Not found');
+        
+        if (!csrfToken) {
+            console.error('❌ CSRF token not found!');
+            alert('Error: CSRF token not found!');
+            // Reset button
+            button.disabled = false;
+            if (btnText) btnText.textContent = 'Run Trend Analysis';
+            if (icon) icon.className = 'fas fa-sync-alt me-2';
+            return;
+        }
+        
+        console.log('📡 Making Real-Time AJAX request to /trends/');
+        
+        // Make AJAX request to update trends
+        fetch('/trends/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'update_trends=1'
+        })
+        .then(response => {
+            console.log('📥 Response received:', response.status, response.statusText);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('📊 Real-Time Data received:', data);
+            
+            // Remove overlay
+            const overlay = document.querySelector('.position-fixed');
+            if (overlay) overlay.remove();
+            
+            if (data.success) {
+                console.log('✅ Success! Updating UI with real-time data...');
+                
+                // Update KPI cards with new real-time data
+                try {
+                    updateKPICards(data.kpi_data);
+                } catch (kpiError) {
+                    console.error('❌ Error updating KPI cards:', kpiError);
+                }
+                
+                // Update product table with new trend scores
+                try {
+                    updateProductTable(data.products);
+                } catch (tableError) {
+                    console.error('❌ Error updating product table:', tableError);
+                }
+                
+                // Update last updated time
+                try {
+                    updateLastUpdatedTime(data.last_updated);
+                } catch (timeError) {
+                    console.error('❌ Error updating time:', timeError);
+                }
+                
+                // Show success message with real-time info
+                try {
+                    showToast('success', 'Real-Time Analysis Complete', data.message);
+                } catch (toastError) {
+                    console.error('❌ Error showing toast:', toastError);
+                    alert('Analysis completed successfully!');
+                }
+            } else {
+                console.log('❌ Error in response:', data.error);
+                alert('Analysis failed: ' + (data.error || 'Unknown error'));
+            }
+            
+            // Reset button
+            button.disabled = false;
+            if (btnText) btnText.textContent = 'Run Trend Analysis';
+            if (icon) icon.className = 'fas fa-sync-alt me-2';
+        })
+        .catch(error => {
+            console.error('💥 Network Error:', error);
+            
+            // Remove overlay
+            const overlay = document.querySelector('.position-fixed');
+            if (overlay) overlay.remove();
+            
+            // Reset button
+            button.disabled = false;
+            if (btnText) btnText.textContent = 'Run Trend Analysis';
+            if (icon) icon.className = 'fas fa-sync-alt me-2';
+            
+            alert('Network Error: ' + error.message);
+        });
+        
+    } catch (error) {
+        console.error('💥 JavaScript Error in runTrendAnalysis:', error);
+        alert('JavaScript Error: ' + error.message);
+    }
+}
+
+// Update KPI cards with new data
+function updateKPICards(kpiData) {
+    // Update High Demand count
+    const highDemandElement = document.querySelector('.text-success.fw-bold');
+    if (highDemandElement) {
+        highDemandElement.textContent = kpiData.high_demand_count;
+    }
+    
+    // Update Low Demand count
+    const lowDemandElement = document.querySelector('.text-danger.fw-bold');
+    if (lowDemandElement) {
+        lowDemandElement.textContent = kpiData.low_demand_count;
+    }
+    
+    // Update Price Actions count
+    const priceActionsElement = document.querySelector('.text-warning.fw-bold');
+    if (priceActionsElement) {
+        priceActionsElement.textContent = kpiData.price_actions_count;
+    }
+    
+    // Update progress bars
+    setupKPIProgressBars();
+}
+
+// Update product table with new data
+function updateProductTable(products) {
+    const tbody = document.querySelector('table tbody');
+    if (!tbody) return;
+    
+    // Clear existing rows
+    tbody.innerHTML = '';
+    
+    if (products.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-5">
+                    <div class="text-muted">
+                        <i class="fas fa-chart-line fa-3x mb-3 opacity-50"></i>
+                        <h5>No products available for trend analysis</h5>
+                        <p>Add products to start AI-powered trend analysis</p>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Add updated product rows
+    products.forEach(product => {
+        const row = createProductRow(product);
+        tbody.appendChild(row);
+    });
+    
+    // Re-setup visualizations
+    setupTrendScoreVisuals();
+    setupStockIndicators();
+}
+
+// Create a product table row
+function createProductRow(product) {
+    const row = document.createElement('tr');
+    row.className = 'trend-row';
+    row.setAttribute('data-trend-score', product.trend_score);
+    row.setAttribute('data-product-id', product.id);
+    
+    // Determine market status
+    let marketStatus = '';
+    if (product.trend_score >= 7) {
+        marketStatus = '<span class="badge bg-success"><i class="fas fa-fire me-1"></i>High Demand</span>';
+    } else if (product.trend_score >= 4) {
+        marketStatus = '<span class="badge bg-warning"><i class="fas fa-minus me-1"></i>Moderate</span>';
+    } else {
+        marketStatus = '<span class="badge bg-danger"><i class="fas fa-arrow-down me-1"></i>Low Demand</span>';
+    }
+    
+    // Determine AI recommendation
+    let recommendation = '';
+    if (product.trend_score >= 7 && product.total_stock < 100) {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-arrow-up text-success me-1"></i>
+                <strong>Increase Stock</strong>
+            </div>
+            <small class="text-muted">High demand, low inventory</small>
+        `;
+    } else if (product.trend_score >= 7 && product.total_stock >= 100) {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-dollar-sign text-success me-1"></i>
+                <strong>Raise Price</strong>
+            </div>
+            <small class="text-muted">High demand, good stock</small>
+        `;
+    } else if (product.trend_score < 3 && product.total_stock > 150) {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-percentage text-danger me-1"></i>
+                <strong>Apply Discount</strong>
+            </div>
+            <small class="text-muted">Low demand, overstock</small>
+        `;
+    } else if (product.trend_score < 3) {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-pause text-warning me-1"></i>
+                <strong>Reduce Orders</strong>
+            </div>
+            <small class="text-muted">Low demand detected</small>
+        `;
+    } else if (product.total_stock < 50) {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-shopping-cart text-info me-1"></i>
+                <strong>Reorder Soon</strong>
+            </div>
+            <small class="text-muted">Stock running low</small>
+        `;
+    } else {
+        recommendation = `
+            <div class="recommendation-item">
+                <i class="fas fa-eye text-muted me-1"></i>
+                <strong>Monitor</strong>
+            </div>
+            <small class="text-muted">Stable conditions</small>
+        `;
+    }
+    
+    // Format last update time
+    let lastUpdate = 'Not analyzed yet';
+    if (product.last_trend_update) {
+        const updateDate = new Date(product.last_trend_update);
+        const now = new Date();
+        const diffMinutes = Math.floor((now - updateDate) / (1000 * 60));
+        
+        if (diffMinutes < 1) {
+            lastUpdate = 'Just now';
+        } else if (diffMinutes < 60) {
+            lastUpdate = `${diffMinutes} minutes ago`;
+        } else {
+            lastUpdate = `Updated ${updateDate.toLocaleString()}`;
+        }
+    }
+    
+    row.innerHTML = `
+        <td>
+            <div class="d-flex align-items-center">
+                <div class="product-avatar me-2">
+                    <i class="fas fa-box text-primary"></i>
+                </div>
+                <div>
+                    <div class="fw-bold">${product.name}</div>
+                    <small class="text-muted">ID: #${product.id}</small>
+                </div>
+            </div>
+        </td>
+        <td>
+            <span class="badge bg-light text-dark">${product.category}</span>
+        </td>
+        <td>
+            <div class="d-flex align-items-center">
+                <div class="stock-indicator me-2" data-stock="${product.total_stock}"></div>
+                <div>
+                    <div class="fw-bold">${product.total_stock}</div>
+                    <small class="text-muted">units</small>
+                </div>
+            </div>
+        </td>
+        <td>
+            <div class="trend-score-container">
+                <div class="d-flex align-items-center mb-1">
+                    <div class="trend-progress me-2">
+                        <div class="progress" style="width: 60px; height: 8px;">
+                            <div class="progress-bar" data-trend-score="${product.trend_score}"></div>
+                        </div>
+                    </div>
+                    <span class="fw-bold trend-score-text" data-trend-score="${product.trend_score}">
+                        ${product.trend_score.toFixed(1)}/10
+                    </span>
+                </div>
+                <small class="text-muted">${lastUpdate}</small>
+            </div>
+        </td>
+        <td>${marketStatus}</td>
+        <td>
+            <div class="recommendation-cell">
+                ${recommendation}
+            </div>
+        </td>
+        <td>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary btn-sm" 
+                        onclick="viewProductDetails(${product.id})" 
+                        title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm" 
+                        onclick="applyRecommendation(${product.id})" 
+                        title="Apply Recommendation">
+                    <i class="fas fa-check"></i>
+                </button>
+                <button type="button" class="btn btn-outline-danger btn-sm" 
+                        onclick="dismissRecommendation(${product.id})" 
+                        title="Dismiss Recommendation">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </td>
+    `;
+    
+    return row;
+}
+
+// Update last updated time
+function updateLastUpdatedTime(lastUpdated) {
+    const lastUpdatedElement = document.getElementById('last-updated');
+    if (lastUpdatedElement && lastUpdated) {
+        const updateDate = new Date(lastUpdated);
+        lastUpdatedElement.textContent = updateDate.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+// Action button functions
+function viewProductDetails(productId) {
+    // Show loading state
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    fetch(`/product-details/${productId}/`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.product) {
+                showProductDetailsModal(data);
+            } else {
+                showToast('error', 'Error', 'Product details not found');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showToast('error', 'Error', 'Failed to load product details');
+        })
+        .finally(() => {
+            button.innerHTML = originalContent;
+            button.disabled = false;
+        });
+}
+
+function applyRecommendation(productId) {
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch('/apply-recommendation/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: `product_id=${productId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('success', 'Applied', data.message);
+            // Optionally refresh the row or update UI
+        } else {
+            showToast('error', 'Failed', data.error || 'Failed to apply recommendation');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('error', 'Error', 'Network error occurred');
+    })
+    .finally(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    });
+}
+
+function dismissRecommendation(productId) {
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    button.disabled = true;
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch('/dismiss-recommendation/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: `product_id=${productId}`
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast('success', 'Dismissed', data.message);
+        } else {
+            showToast('error', 'Failed', data.error || 'Failed to dismiss recommendation');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showToast('error', 'Error', 'Network error occurred');
+    })
+    .finally(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    });
+}
+
+// Show product details modal
+function showProductDetailsModal(data) {
+    const product = data.product;
+    const recentStock = data.recent_stock || [];
+    const recentSales = data.recent_sales || [];
+    const metrics = data.metrics || {};
+    
+    const modalHTML = `
+        <div class="modal fade" id="productDetailsModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header bg-primary text-white">
+                        <h5 class="modal-title">
+                            <i class="fas fa-box me-2"></i>${product.name} - Detailed Analysis
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold mb-3">Product Information</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Category:</strong></td><td>${product.category}</td></tr>
+                                    <tr><td><strong>Cost Price:</strong></td><td>₹${product.cost_price}</td></tr>
+                                    <tr><td><strong>Selling Price:</strong></td><td>₹${product.selling_price}</td></tr>
+                                    <tr><td><strong>Current Price:</strong></td><td>₹${product.current_price}</td></tr>
+                                    <tr><td><strong>ABC Class:</strong></td><td>${product.abc_classification}</td></tr>
+                                    <tr><td><strong>Total Stock:</strong></td><td>${product.total_stock} units</td></tr>
+                                    <tr><td><strong>Trend Score:</strong></td><td>${product.trend_score.toFixed(1)}/10</td></tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold mb-3">Performance Metrics</h6>
+                                <table class="table table-sm">
+                                    <tr><td><strong>Sales This Month:</strong></td><td>${metrics.total_sales_this_month || 0} units</td></tr>
+                                    <tr><td><strong>Stock Turnover:</strong></td><td>${metrics.stock_turnover || 0}</td></tr>
+                                    <tr><td><strong>Days of Stock:</strong></td><td>${metrics.days_of_stock || 'N/A'} days</td></tr>
+                                </table>
+                                
+                                <h6 class="fw-bold mb-3 mt-4">Recent Stock Entries</h6>
+                                <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                                    <table class="table table-sm">
+                                        <thead><tr><th>Quantity</th><th>Expiry</th><th>Added</th></tr></thead>
+                                        <tbody>
+                                            ${recentStock.map(stock => `
+                                                <tr>
+                                                    <td>${stock.quantity}</td>
+                                                    <td>${stock.expiry_date}</td>
+                                                    <td>${stock.created_at}</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if any
+    const existingModal = document.getElementById('productDetailsModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('productDetailsModal'));
+    modal.show();
+}
+
+function showAnalysisOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center';
+    overlay.style.backgroundColor = 'rgba(0,0,0,0.8)';
+    overlay.style.zIndex = '9999';
+    
+    const now = new Date();
+    const analysisTime = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    overlay.innerHTML = `
+        <div class="card shadow-lg border-0" style="min-width: 500px; max-width: 600px;">
+            <div class="card-header bg-primary text-white text-center">
+                <h4 class="mb-0">
+                    <i class="fas fa-brain me-2"></i>Real-Time Market Trend Analysis
+                </h4>
+            </div>
+            <div class="card-body text-center p-4">
+                <div class="mb-4">
+                    <div class="spinner-border text-primary mb-3" role="status" style="width: 4rem; height: 4rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 class="text-primary mb-2">🎯 Analyzing Current Market Trends</h5>
+                    <p class="text-muted mb-3">AI is checking real-time market conditions, demand patterns, and pricing opportunities...</p>
+                </div>
+                
+                <div class="row text-start mb-4">
+                    <div class="col-6">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            <small>Market Data Collection</small>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-spinner fa-spin text-primary me-2"></i>
+                            <small>Real-Time Trend Analysis</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-clock text-muted me-2"></i>
+                            <small>Price Optimization</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-clock text-muted me-2"></i>
+                            <small>Stock Level Assessment</small>
+                        </div>
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="fas fa-clock text-muted me-2"></i>
+                            <small>Demand Forecasting</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-clock text-muted me-2"></i>
+                            <small>Report Generation</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mb-3">
+                    <i class="fas fa-clock me-1"></i>
+                    <strong>Analysis Started:</strong> ${analysisTime}
+                </div>
+                
+                <div class="progress mb-3" style="height: 12px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" 
+                         style="width: 100%"></div>
+                </div>
+                
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div class="small text-muted">
+                            <i class="fas fa-robot d-block mb-1"></i>
+                            AI Engine
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="small text-muted">
+                            <i class="fas fa-database d-block mb-1"></i>
+                            Live Data
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="small text-muted">
+                            <i class="fas fa-chart-line d-block mb-1"></i>
+                            Market Intelligence
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(overlay);
+}
+
+// Utility function for toast notifications
+function showToast(type, title, message) {
+    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+    const toastId = 'toast-' + Date.now();
+    
+    const bgClass = type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle';
+    
+    const toastHTML = `
+        <div id="${toastId}" class="toast" role="alert">
+            <div class="toast-header ${bgClass} text-white">
+                <i class="fas fa-${icon} me-2"></i>
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 5000 });
+    toast.show();
+    
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        this.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+function refreshAnalysis() {
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Refreshing...';
+    button.disabled = true;
+    
+    setTimeout(() => {
+        location.reload();
+    }, 2000);
+}
+
+// Add custom CSS for enhanced styling
+const style = document.createElement('style');
+style.textContent = `
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    }
+    
+    .kpi-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+    }
+    
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+    
+    .product-avatar {
+        width: 32px;
+        height: 32px;
+        background: rgba(0, 123, 255, 0.1);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .trend-row:hover {
+        background-color: rgba(0, 123, 255, 0.05);
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+    
+    .recommendation-cell {
+        min-width: 200px;
+    }
+    
+    .recommendation-item {
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+    
+    .card {
+        transition: all 0.2s ease;
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

@@ -1,0 +1,699 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventory Dashboard - NeuroStock{% endblock %}
+
+{% block nav %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cube me-2"></i>NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                            <i class="fas fa-warehouse me-1"></i>Inventory
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'billing' %}">
+                            <i class="fas fa-receipt me-1"></i>Billing
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown me-3">
+                        <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button" 
+                           onclick="showNotifications()">
+                            <i class="fas fa-bell"></i>
+                            {% if total_notifications > 0 %}
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                {{ total_notifications }}
+                            </span>
+                            {% endif %}
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">Inventory Management</h2>
+                <p class="text-muted mb-0">Manage products and stock entries</p>
+            </div>
+            <div class="stats-card">
+                <div class="text-success">
+                    <i class="fas fa-check-circle me-1"></i>System Active
+                </div>
+                <div class="small text-muted">Monitoring enabled</div>
+                <div class="small text-info mt-1">
+                    <i class="fas fa-clock me-1"></i><span id="current-time-inventory">--:--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notifications Panel - Always Visible -->
+<div class="row mb-4" id="notifications-panel">
+    <div class="col-12">
+        <div class="card shadow-lg border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell me-2"></i>Notifications
+                    {% if total_notifications > 0 %}
+                        <span class="badge bg-light text-primary ms-2">{{ total_notifications }} New</span>
+                    {% endif %}
+                    {% if read_notifications %}
+                        <span class="badge bg-secondary ms-2">{{ read_notifications|length }} Read</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Tabs for New and History -->
+                <ul class="nav nav-tabs mb-3" id="notificationTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="new-tab" data-bs-toggle="tab" data-bs-target="#new-notifications" type="button" role="tab">
+                            <i class="fas fa-bell me-1"></i>New Notifications ({{ total_notifications }})
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#notification-history" type="button" role="tab">
+                            <i class="fas fa-history me-1"></i>History ({{ read_notifications|length }})
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content" id="notificationTabContent">
+                    <!-- New Notifications Tab -->
+                    <div class="tab-pane fade show active" id="new-notifications" role="tabpanel">
+                        {% if notifications %}
+                            {% for notification in notifications %}
+                            <div class="notification-item priority-{{ notification.priority }} mb-3 p-3 border rounded" data-notification-id="{{ notification.id }}">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 text-primary">{{ notification.title }}</h6>
+                                        <p class="mb-2 text-muted">{{ notification.message|linebreaks }}</p>
+                                        {% if notification.product %}
+                                        <div class="small text-info">
+                                            <i class="fas fa-box me-1"></i>{{ notification.product.name }}
+                                            <span class="ms-2 text-muted">Stock: {{ notification.product.total_stock }} units</span>
+                                        </div>
+                                        {% endif %}
+                                        <div class="small text-muted mt-2">
+                                            <i class="fas fa-clock me-1"></i><span class="notification-time" data-created-time="{{ notification.created_at|date:'c' }}">{{ notification.created_at|timesince }} ago</span>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <button class="btn btn-sm btn-success mark-read-btn" data-notification-id="{{ notification.id }}" title="Mark as read">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+                                        {% if notification.product %}
+                                        <button class="btn btn-sm btn-outline-primary ms-1" data-product-id="{{ notification.product.id }}" 
+                                                onclick="viewProductDetails(this.getAttribute('data-product-id'))" title="View product">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No new notifications</h5>
+                                <p class="text-muted">You're all caught up!</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Notification History Tab -->
+                    <div class="tab-pane fade" id="notification-history" role="tabpanel">
+                        {% if read_notifications %}
+                            {% for notification in read_notifications %}
+                            <div class="notification-item-read mb-3 p-3 border rounded bg-light">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h6 class="mb-1 text-muted">
+                                            <i class="fas fa-check-circle text-success me-1"></i>{{ notification.title }}
+                                        </h6>
+                                        <p class="mb-2 text-muted small">{{ notification.message|linebreaks }}</p>
+                                        {% if notification.product %}
+                                        <div class="small text-info">
+                                            <i class="fas fa-box me-1"></i>{{ notification.product.name }}
+                                        </div>
+                                        {% endif %}
+                                        <div class="small text-muted mt-2">
+                                            <i class="fas fa-clock me-1"></i>Received: <span class="notification-received-time" data-created-time="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"M d, Y H:i" }}</span>
+                                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: <span class="notification-read-time" data-read-time="{{ notification.safe_updated_at|date:'c' }}">{{ notification.safe_updated_at|date:"M d, Y H:i" }}</span></span>
+                                        </div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-success">Read</span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-4">
+                                <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No notification history</h5>
+                                <p class="text-muted">Read notifications will appear here</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Forms Row -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Add Product</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {{ product_form.name.label_tag }}
+                        {{ product_form.name }}
+                    </div>
+                    <div class="mb-3">
+                        {{ product_form.category.label_tag }}
+                        {{ product_form.category }}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            {{ product_form.cost_price.label_tag }}
+                            {{ product_form.cost_price }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            {{ product_form.selling_price.label_tag }}
+                            {{ product_form.selling_price }}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        {{ product_form.abc_classification.label_tag }}
+                        {{ product_form.abc_classification }}
+                    </div>
+                    <button type="submit" name="add_product" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Add Product
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-6 mb-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Add Stock</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        {{ stock_form.product.label_tag }}
+                        {{ stock_form.product }}
+                    </div>
+                    <div class="mb-3">
+                        {{ stock_form.quantity.label_tag }}
+                        {{ stock_form.quantity }}
+                    </div>
+                    <div class="mb-3">
+                        {{ stock_form.expiry_date.label_tag }}
+                        {{ stock_form.expiry_date }}
+                    </div>
+                    <button type="submit" name="add_stock" class="btn btn-success">
+                        <i class="fas fa-plus me-1"></i>Add Stock
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Products Table -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Products Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table" id="products-table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th>Cost Price</th>
+                                <th>Selling Price</th>
+                                <th>Current Price</th>
+                                <th>Class</th>
+                                <th>Stock</th>
+                                <th>Trend Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr data-product-id="{{ product.id }}">
+                                <td><strong>{{ product.name }}</strong></td>
+                                <td>{{ product.category }}</td>
+                                <td>₹{{ product.cost_price }}</td>
+                                <td>₹{{ product.selling_price }}</td>
+                                <td><strong>₹{{ product.new_price }}</strong></td>
+                                <td>
+                                    <span class="badge bg-{% if product.abc_classification == 'A' %}danger{% elif product.abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
+                                        {{ product.abc_classification }}
+                                    </span>
+                                </td>
+                                <td>{{ product.total_stock }}</td>
+                                <td>
+                                    <span class="badge bg-{% if product.trend_score >= 7 %}success{% elif product.trend_score >= 4 %}warning{% else %}danger{% endif %}">
+                                        {{ product.trend_score|floatformat:1 }}/10
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center text-muted">No products available</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Stock Entries -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Stock Entries</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Quantity</th>
+                                <th>Expiry Date</th>
+                                <th>Added On</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for stock in recent_stock %}
+                            <tr>
+                                <td>{{ stock.product.name }}</td>
+                                <td>{{ stock.quantity }} units</td>
+                                <td>{{ stock.expiry_date }}</td>
+                                <td>{{ stock.created_at|date:"M d, Y" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No recent stock entries</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Real-time clock for inventory
+function updateInventoryTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    const currentTimeElement = document.getElementById('current-time-inventory');
+    if (currentTimeElement) {
+        currentTimeElement.textContent = timeString;
+    }
+    
+    // Update notification relative times
+    updateNotificationTimes();
+}
+
+function updateNotificationTimes() {
+    const now = new Date();
+    
+    // Update notification times
+    document.querySelectorAll('.notification-time').forEach(element => {
+        const createdTime = element.getAttribute('data-created-time');
+        if (createdTime) {
+            const createdDate = new Date(createdTime);
+            const diffMs = now - createdDate;
+            const diffMinutes = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMinutes / 60);
+            const diffDays = Math.floor(diffHours / 24);
+            
+            let relativeText = '';
+            if (diffMinutes < 1) {
+                relativeText = 'just now';
+            } else if (diffMinutes < 60) {
+                relativeText = `${diffMinutes} minute${diffMinutes !== 1 ? 's' : ''} ago`;
+            } else if (diffHours < 24) {
+                relativeText = `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
+            } else {
+                relativeText = `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
+            }
+            
+            element.textContent = relativeText;
+        }
+    });
+}
+
+// Initialize inventory time updates
+document.addEventListener('DOMContentLoaded', function() {
+    updateInventoryTime();
+    setInterval(updateInventoryTime, 1000);
+});
+
+// Notification System JavaScript - Isolated and Clean
+(function() {
+    'use strict';
+    
+    console.log('🚀 Initializing notification system...');
+    
+    // Global functions for template usage
+    window.showNotifications = function() {
+        console.log('🔔 Bell icon clicked');
+        const panel = document.getElementById('notifications-panel');
+        if (panel) {
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+    
+    window.viewProductDetails = function(productId) {
+        console.log('👁 Eye icon clicked for product:', productId);
+        
+        // Fetch product details via AJAX
+        fetch(`/product-details/${productId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                const product = data.product;
+                const batches = data.recent_stock || [];
+                
+                let batchInfo = '';
+                if (batches.length > 0) {
+                    batchInfo = '\n\nStock Batches (FEFO Order):';
+                    batches.forEach((batch, index) => {
+                        batchInfo += `\n${index + 1}. ${batch.quantity} units - Expires: ${batch.expiry_date}`;
+                    });
+                } else {
+                    batchInfo = '\n\nNo stock batches available';
+                }
+                
+                const details = `Product Details:
+• Name: ${product.name}
+• Category: ${product.category}
+• Current Stock: ${product.total_stock} units
+• Current Price: ₹${product.current_price}
+• Selling Price: ₹${product.selling_price}
+• Cost Price: ₹${product.cost_price}
+• ABC Classification: ${product.abc_classification}
+• Trend Score: ${product.trend_score}/10${batchInfo}`;
+                
+                alert(details);
+            })
+            .catch(error => {
+                console.error('Error fetching product details:', error);
+                alert('Error loading product details. Please try again.');
+            });
+    };
+    
+    // Initialize notification buttons when DOM is ready
+    function initializeNotificationButtons() {
+        console.log('📄 Initializing notification buttons...');
+        
+        const markReadButtons = document.querySelectorAll('.mark-read-btn');
+        console.log(`🔍 Found ${markReadButtons.length} mark-read buttons`);
+        
+        markReadButtons.forEach(function(button, index) {
+            // Remove any existing listeners to prevent duplicates
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            console.log(`🔧 Setting up button ${index + 1}`);
+            
+            newButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('✅ Mark as read button clicked!');
+                
+                const notificationId = this.getAttribute('data-notification-id');
+                console.log('📝 Notification ID:', notificationId);
+                
+                if (!notificationId) {
+                    alert('Error: No notification ID found');
+                    return;
+                }
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (!csrfToken) {
+                    alert('Error: CSRF token not found. Please refresh the page.');
+                    return;
+                }
+                
+                console.log('🔐 CSRF token found');
+                
+                // Show loading state
+                const originalHTML = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                this.disabled = true;
+                
+                console.log('📡 Sending AJAX request...');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+                formData.append('notification_id', notificationId);
+                
+                // Send AJAX request
+                fetch('/inventory/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    console.log('📨 Response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 Response data:', data);
+                    
+                    if (data.success) {
+                        console.log('✅ Success! Hiding notification...');
+                        
+                        // Find and hide the notification item
+                        const notificationItem = this.closest('.notification-item');
+                        if (notificationItem) {
+                            // Smooth fade out animation
+                            notificationItem.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                            notificationItem.style.opacity = '0';
+                            notificationItem.style.transform = 'translateX(100%)';
+                            
+                            setTimeout(() => {
+                                notificationItem.style.display = 'none';
+                                
+                                // Update notification badge count
+                                updateNotificationBadge();
+                                
+                                // Show success message
+                                showSuccessMessage('✅ Notification marked as read!');
+                                
+                            }, 500);
+                        }
+                    } else {
+                        console.error('❌ Server error:', data.error);
+                        alert('Error: ' + (data.error || 'Failed to mark as read'));
+                        
+                        // Restore button state
+                        this.innerHTML = originalHTML;
+                        this.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Network error:', error);
+                    alert('Network error. Please check your connection and try again.');
+                    
+                    // Restore button state
+                    this.innerHTML = originalHTML;
+                    this.disabled = false;
+                });
+            });
+        });
+        
+        console.log('✅ All notification buttons initialized!');
+    }
+    
+    // Helper function to update notification badge
+    function updateNotificationBadge() {
+        const badge = document.querySelector('.position-absolute.badge.bg-danger');
+        if (badge) {
+            const currentCount = parseInt(badge.textContent) || 0;
+            if (currentCount > 1) {
+                badge.textContent = currentCount - 1;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+        
+        // Update tab counts
+        const newTab = document.querySelector('#new-tab');
+        if (newTab) {
+            const visibleNotifications = document.querySelectorAll('.notification-item:not([style*="display: none"])').length;
+            newTab.innerHTML = `<i class="fas fa-bell me-1"></i>New Notifications (${visibleNotifications})`;
+        }
+    }
+    
+    // Helper function to show success message
+    function showSuccessMessage(message) {
+        // Create a temporary success alert
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
+        alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(alertDiv);
+        
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 3000);
+    }
+    
+    // Initialize when DOM is ready
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeNotificationButtons);
+    } else {
+        initializeNotificationButtons();
+    }
+    
+    console.log('📜 Notification system script loaded successfully');
+})();
+</script>
+
+<style>
+/* Notification styling */
+.notification-item {
+    transition: all 0.3s ease;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #007bff;
+}
+
+.notification-item.priority-high {
+    border-left-color: #fd7e14;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+}
+
+.notification-item.priority-urgent {
+    border-left-color: #dc3545;
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+}
+
+.notification-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.nav-link .badge {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+/* Mark as read button styling */
+.mark-read-btn {
+    transition: all 0.2s ease;
+    position: relative;
+}
+
+.mark-read-btn:hover {
+    transform: scale(1.1);
+}
+
+.mark-read-btn:disabled {
+    opacity: 0.6;
+    transform: none;
+}
+
+/* Eye icon button styling */
+.btn-outline-primary:hover {
+    transform: scale(1.05);
+}
+
+/* Success message styling */
+.alert.position-fixed {
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+</style>
+{% endblock %}

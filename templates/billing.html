@@ -1,0 +1,544 @@
+{% extends 'base.html' %}
+
+{% block title %}Billing Dashboard - NeuroStock{% endblock %}
+
+{% block nav %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-cube me-2"></i>NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                            <i class="fas fa-warehouse me-1"></i>Inventory
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'billing' %}">
+                            <i class="fas fa-receipt me-1"></i>Billing
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                            <i class="fas fa-cog me-1"></i>Admin
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">Billing & Sales</h2>
+                <p class="text-muted mb-0">Process sales with FEFO stock deduction</p>
+            </div>
+            <div class="stats-card">
+                <div class="text-success">
+                    <i class="fas fa-cash-register me-1"></i>POS Ready
+                </div>
+                <div class="small text-muted">Sales system active</div>
+                <div class="small text-info mt-1">
+                    <i class="fas fa-clock me-1"></i><span id="current-time-billing">--:--</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sales Statistics -->
+<div class="row mb-4">
+    <div class="col-md-4 mb-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="stats-label">Today's Sales</p>
+                    <h3 class="stats-number">₹{{ today_sales_amount|floatformat:2 }}</h3>
+                </div>
+                <div class="stats-icon bg-primary text-white">
+                    <i class="fas fa-rupee-sign"></i>
+                </div>
+            </div>
+            <p class="small text-muted mb-0">{{ today_sales_count }} transactions today</p>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="stats-label">Today's Bills</p>
+                    <h3 class="stats-number">{{ today_sales_count }}</h3>
+                </div>
+                <div class="stats-icon bg-success text-white">
+                    <i class="fas fa-receipt"></i>
+                </div>
+            </div>
+            <p class="small text-muted mb-0">Total transactions processed</p>
+        </div>
+    </div>
+    <div class="col-md-4 mb-3">
+        <div class="stats-card">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <p class="stats-label">Monthly Sales</p>
+                    <h3 class="stats-number">₹{{ monthly_sales_amount|floatformat:2 }}</h3>
+                </div>
+                <div class="stats-icon bg-info text-white">
+                    <i class="fas fa-calendar-alt"></i>
+                </div>
+            </div>
+            <p class="small text-muted mb-0">{{ monthly_sales_count }} transactions in {{ current_month_name }}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="row">
+    <!-- Sales Form -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Create New Sale</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="sales-form">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="{{ sales_form.product.id_for_label }}" class="form-label">
+                            <i class="fas fa-box me-1"></i>Select Product
+                        </label>
+                        {{ sales_form.product }}
+                        <div class="form-text">Choose a product to see its details and pricing</div>
+                    </div>
+                    
+                    <!-- Product Details Section -->
+                    <div class="mb-3" id="product-details" style="display: none;">
+                        <div class="card bg-light border-primary">
+                            <div class="card-header bg-primary text-white py-2">
+                                <h6 class="mb-0">
+                                    <i class="fas fa-info-circle me-1"></i>Product Information
+                                </h6>
+                            </div>
+                            <div class="card-body py-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-2">
+                                            <small class="text-muted">Product Name:</small>
+                                            <div class="fw-bold" id="product-name">-</div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted">Category:</small>
+                                            <div id="product-category">-</div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted">Current Price:</small>
+                                            <div class="fw-bold text-success" id="unit-price">₹0.00</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-2">
+                                            <small class="text-muted">Available Stock:</small>
+                                            <div class="fw-bold" id="available-stock">
+                                                <span class="text-success">0 units</span>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted">ABC Classification:</small>
+                                            <div id="abc-class">
+                                                <span class="badge bg-secondary">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="mb-2">
+                                            <small class="text-muted">Trend Score:</small>
+                                            <div id="trend-score">
+                                                <span class="badge bg-info">-/10</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="{{ sales_form.quantity.id_for_label }}" class="form-label">
+                            <i class="fas fa-sort-numeric-up me-1"></i>Quantity
+                        </label>
+                        <div class="input-group">
+                            {{ sales_form.quantity }}
+                            <span class="input-group-text">units</span>
+                        </div>
+                        <div class="form-text">Enter quantity (max: <span id="max-quantity">0</span> units available)</div>
+                    </div>
+                    
+                    <!-- Total Amount Preview -->
+                    <div class="mb-3" id="amount-preview" style="display: none;">
+                        <div class="card bg-success text-white">
+                            <div class="card-body py-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-1">Total Amount</h6>
+                                        <small class="opacity-75">Quantity × Unit Price</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <h3 class="mb-0" id="total-amount">₹0.00</h3>
+                                        <small class="opacity-75" id="calculation-details">0 × ₹0.00</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Stock Warning -->
+                    <div class="mb-3" id="stock-warning" style="display: none;">
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            <strong>Stock Warning:</strong> <span id="warning-message"></span>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-shopping-cart me-1"></i>Process Sale
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Bills -->
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Bills</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Bill Number</th>
+                                <th>Date & Time</th>
+                                <th>Total Amount</th>
+                                <th>Items</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bill in recent_bills %}
+                            <tr>
+                                <td><strong>{{ bill.bill_number }}</strong></td>
+                                <td class="bill-time" data-created-time="{{ bill.created_at|date:'c' }}">{{ bill.created_at|date:"M d, H:i" }}</td>
+                                <td><strong>₹{{ bill.total_amount }}</strong></td>
+                                <td>{{ bill.items.count }} item{{ bill.items.count|pluralize }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewBillDetails('{{ bill.id }}')">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No recent bills</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Real-time clock for billing
+function updateBillingTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    const currentTimeElement = document.getElementById('current-time-billing');
+    if (currentTimeElement) {
+        currentTimeElement.textContent = timeString;
+    }
+}
+
+// Initialize billing time updates
+document.addEventListener('DOMContentLoaded', function() {
+    updateBillingTime();
+    setInterval(updateBillingTime, 1000);
+});
+
+// Enhanced product details and billing functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const productInput = document.querySelector('input[name="product"]');
+    const quantityInput = document.querySelector('input[name="quantity"]');
+    const submitButton = document.querySelector('button[type="submit"]');
+    
+    let currentProductData = null;
+    
+    if (productInput) {
+        productInput.addEventListener('change', function() {
+            const productName = this.value.trim();
+            
+            if (productName) {
+                // Show loading state
+                showProductDetails(true);
+                document.getElementById('product-name').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+                
+                // Find product by name and fetch details
+                fetch(`/api/search-products/?q=${encodeURIComponent(productName)}`)
+                    .then(response => response.json())
+                    .then(searchData => {
+                        const exactMatch = searchData.products.find(p => 
+                            p.name.toLowerCase() === productName.toLowerCase()
+                        );
+                        
+                        if (exactMatch) {
+                            // Fetch detailed product information
+                            return fetch(`/product-details/${exactMatch.id}/`);
+                        } else {
+                            throw new Error('Product not found');
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        currentProductData = data;
+                        updateProductDetails(data);
+                        updateQuantityValidation(data.total_stock);
+                        updateTotal();
+                    })
+                    .catch(error => {
+                        console.error('Error fetching product details:', error);
+                        showError('Product not found or failed to load details. Please select from the dropdown.');
+                        hideProductDetails();
+                        currentProductData = null;
+                    });
+            } else {
+                hideProductDetails();
+                currentProductData = null;
+            }
+        });
+    }
+    
+    if (quantityInput) {
+        quantityInput.addEventListener('input', function() {
+            updateTotal();
+            validateQuantity();
+        });
+        
+        quantityInput.addEventListener('blur', validateQuantity);
+    }
+    
+    function updateProductDetails(data) {
+        document.getElementById('product-name').textContent = data.name;
+        document.getElementById('product-category').textContent = data.category;
+        document.getElementById('unit-price').textContent = `₹${parseFloat(data.current_price).toFixed(2)}`;
+        
+        // Update stock with color coding
+        const stockElement = document.getElementById('available-stock');
+        const stockCount = data.total_stock;
+        let stockClass = 'text-success';
+        let stockIcon = 'fas fa-check-circle';
+        
+        if (stockCount === 0) {
+            stockClass = 'text-danger';
+            stockIcon = 'fas fa-times-circle';
+        } else if (stockCount < 10) {
+            stockClass = 'text-warning';
+            stockIcon = 'fas fa-exclamation-triangle';
+        }
+        
+        stockElement.innerHTML = `<i class="${stockIcon} me-1"></i><span class="${stockClass}">${stockCount} units</span>`;
+        
+        // Update ABC classification
+        const abcElement = document.getElementById('abc-class');
+        const abcClass = data.abc_classification;
+        let badgeClass = 'bg-secondary';
+        
+        if (abcClass === 'A') badgeClass = 'bg-danger';
+        else if (abcClass === 'B') badgeClass = 'bg-warning';
+        else if (abcClass === 'C') badgeClass = 'bg-secondary';
+        
+        abcElement.innerHTML = `<span class="badge ${badgeClass}">${abcClass} - ${abcClass === 'A' ? 'High Value' : abcClass === 'B' ? 'Medium Value' : 'Low Value'}</span>`;
+        
+        // Update trend score
+        const trendElement = document.getElementById('trend-score');
+        const trendScore = parseFloat(data.trend_score || 0);
+        let trendClass = 'bg-info';
+        
+        if (trendScore >= 7) trendClass = 'bg-success';
+        else if (trendScore >= 4) trendClass = 'bg-warning';
+        else trendClass = 'bg-danger';
+        
+        trendElement.innerHTML = `<span class="badge ${trendClass}">${trendScore.toFixed(1)}/10</span>`;
+        
+        // Update max quantity helper
+        document.getElementById('max-quantity').textContent = stockCount;
+    }
+    
+    function updateQuantityValidation(maxStock) {
+        if (quantityInput) {
+            quantityInput.setAttribute('max', maxStock);
+            quantityInput.setAttribute('min', '1');
+        }
+    }
+    
+    function validateQuantity() {
+        if (!currentProductData || !quantityInput.value) return;
+        
+        const quantity = parseInt(quantityInput.value) || 0;
+        const maxStock = currentProductData.total_stock;
+        const warningDiv = document.getElementById('stock-warning');
+        const warningMessage = document.getElementById('warning-message');
+        
+        if (quantity > maxStock) {
+            warningDiv.style.display = 'block';
+            warningMessage.textContent = `Requested quantity (${quantity}) exceeds available stock (${maxStock} units).`;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Insufficient Stock';
+        } else if (quantity <= 0) {
+            warningDiv.style.display = 'block';
+            warningMessage.textContent = 'Please enter a valid quantity (minimum 1 unit).';
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Invalid Quantity';
+        } else {
+            warningDiv.style.display = 'none';
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-shopping-cart me-1"></i>Process Sale';
+        }
+    }
+    
+    function updateTotal() {
+        if (!currentProductData || !quantityInput.value) {
+            hideAmountPreview();
+            return;
+        }
+        
+        const quantity = parseInt(quantityInput.value) || 0;
+        const unitPrice = parseFloat(currentProductData.current_price) || 0;
+        const total = quantity * unitPrice;
+        
+        if (quantity > 0 && unitPrice > 0) {
+            showAmountPreview();
+            document.getElementById('total-amount').textContent = `₹${total.toFixed(2)}`;
+            document.getElementById('calculation-details').textContent = `${quantity} × ₹${unitPrice.toFixed(2)}`;
+        } else {
+            hideAmountPreview();
+        }
+    }
+    
+    function showProductDetails(loading = false) {
+        document.getElementById('product-details').style.display = 'block';
+    }
+    
+    function hideProductDetails() {
+        document.getElementById('product-details').style.display = 'none';
+        hideAmountPreview();
+        document.getElementById('stock-warning').style.display = 'none';
+    }
+    
+    function showAmountPreview() {
+        document.getElementById('amount-preview').style.display = 'block';
+    }
+    
+    function hideAmountPreview() {
+        document.getElementById('amount-preview').style.display = 'none';
+    }
+    
+    function showError(message) {
+        // You can implement a toast notification here
+        alert(message);
+    }
+});
+
+function viewBillDetails(billId) {
+    fetch(`/bill-details/${billId}/`)
+        .then(response => response.json())
+        .then(data => {
+            let itemsHtml = '';
+            data.items.forEach(item => {
+                itemsHtml += `
+                    <tr>
+                        <td>${item.product_name}</td>
+                        <td>${item.quantity}</td>
+                        <td>₹${item.price}</td>
+                        <td>₹${item.total}</td>
+                    </tr>
+                `;
+            });
+            
+            const modalHtml = `
+                <div class="modal fade" id="billModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Bill Details - ${data.bill_number}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p><strong>Date:</strong> ${data.created_at}</p>
+                                <p><strong>Total Amount:</strong> ₹${data.total_amount}</p>
+                                <h6>Items:</h6>
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Quantity</th>
+                                            <th>Unit Price</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${itemsHtml}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const existingModal = document.getElementById('billModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            const modal = new bootstrap.Modal(document.getElementById('billModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error fetching bill details:', error);
+            alert('Error loading bill details');
+        });
+}
+</script>
+{% endblock %}

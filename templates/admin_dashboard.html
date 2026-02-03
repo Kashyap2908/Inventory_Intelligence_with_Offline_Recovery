@@ -1,0 +1,953 @@
+{% extends 'base.html' %}
+
+{% block title %}Admin Dashboard - NeuroStock AI{% endblock %}
+{% block nav %}
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-brain"></i> NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                            <i class="fas fa-warehouse"></i> Inventory
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                            <i class="fas fa-chart-line"></i> Trends
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                            <i class="fas fa-cog"></i> Admin
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'billing' %}">
+                            <i class="fas fa-receipt"></i> Billing
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <!-- Admin Notification Tracking -->
+                    {% if unread_notifications > 0 %}
+                    <li class="nav-item me-3">
+                        <a class="nav-link position-relative" href="#notificationTracking" title="Unread notifications sent">
+                            <i class="fas fa-paper-plane fs-5"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
+                                {{ unread_notifications }}
+                                <span class="visually-hidden">unread sent notifications</span>
+                            </span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user"></i> {{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2><i class="fas fa-cog"></i> Administration</h2>
+                <p class="text-muted">Stock intelligence, pricing decisions, and order management</p>
+            </div>
+            <div class="text-end">
+                <div class="card bg-light border-0">
+                    <div class="card-body py-2 px-3">
+                        <div class="text-success fw-bold">
+                            <i class="fas fa-shield-alt me-1"></i>
+                            Admin Access
+                        </div>
+                        <div class="small text-muted">
+                            System Status: <span class="text-success">Active</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stock Intelligence Analysis -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5><i class="fas fa-brain"></i> Stock Intelligence Analysis</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Total Stock</th>
+                                <th>ABC Class</th>
+                                <th>Trend Score</th>
+                                <th>Days to Expiry</th>
+                                <th>Condition</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in stock_analysis %}
+                            <tr>
+                                <td><strong>{{ item.product.name }}</strong></td>
+                                <td>{{ item.total_stock }}</td>
+                                <td>
+                                    <span class="badge bg-{% if item.product.abc_classification == 'A' %}danger{% elif item.product.abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
+                                        {{ item.product.abc_classification }}
+                                    </span>
+                                </td>
+                                <td>{{ item.product.trend_score|floatformat:1 }}/10</td>
+                                <td>
+                                    {% if item.days_to_expiry %}
+                                        {{ item.days_to_expiry }} days
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge condition-{{ item.condition|lower|cut:' ' }}">
+                                        {{ item.condition }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if item.condition == "Reorder needed" %}
+                                        <form method="post" action="{% url 'create_order' %}" class="d-inline">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="product" value="{{ item.product.id }}">
+                                            <input type="hidden" name="quantity" value="100">
+                                            <button type="submit" class="btn btn-sm btn-warning">
+                                                <i class="fas fa-shopping-cart"></i> Order
+                                            </button>
+                                        </form>
+                                    {% elif item.condition == "Overstock" %}
+                                        <button class="btn btn-sm btn-info" 
+                                                data-product-id="{{ item.product.id }}" 
+                                                data-product-name="{{ item.product.name }}"
+                                                onclick="setDiscountProduct(this.getAttribute('data-product-id'), this.getAttribute('data-product-name'))">
+                                            <i class="fas fa-percentage"></i> Discount
+                                        </button>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="7" class="text-center text-muted">No products to analyze</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pricing Decision -->
+<div class="row mb-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-warning text-dark">
+                <h5><i class="fas fa-tags"></i> Apply Discount</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Display form errors -->
+                    {% if discount_form.errors %}
+                        <div class="alert alert-danger">
+                            <h6><i class="fas fa-exclamation-triangle"></i> Form Errors:</h6>
+                            {% for field, errors in discount_form.errors.items %}
+                                <div><strong>{{ field|title }}:</strong>
+                                    {% for error in errors %}
+                                        <div>• {{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        {{ discount_form.product.label_tag }}
+                        {{ discount_form.product }}
+                        {% if discount_form.product.errors %}
+                            <div class="text-danger small">{{ discount_form.product.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    <div class="mb-3">
+                        {{ discount_form.discount_percentage.label_tag }}
+                        <div class="input-group">
+                            {{ discount_form.discount_percentage }}
+                            <span class="input-group-text">%</span>
+                        </div>
+                        {% if discount_form.discount_percentage.errors %}
+                            <div class="text-danger small">{{ discount_form.discount_percentage.errors.0 }}</div>
+                        {% endif %}
+                    </div>
+                    <button type="submit" name="apply_discount" class="btn btn-warning">
+                        <i class="fas fa-percentage"></i> Apply Discount
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Send Notification Form -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5><i class="fas fa-bell"></i> Send Notification to Inventory Team</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="notificationForm">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="product_name" class="form-label">
+                                <i class="fas fa-box me-1"></i>Product Name
+                            </label>
+                            <input type="text" class="form-control product-autocomplete" id="product_name" name="product_name" 
+                                   placeholder="Type product name..." required onchange="updateProductInfo()" autocomplete="off">
+                            <div class="form-text">Enter the exact product name</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="product_category" class="form-label">
+                                <i class="fas fa-tags me-1"></i>Product Category
+                            </label>
+                            <input type="text" class="form-control" id="product_category" name="product_category" 
+                                   placeholder="Enter category" required>
+                            <div class="form-text">e.g., Electronics, Food, Clothing</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Auto-populated product info -->
+                    <div class="row" id="productInfoSection" style="display: none;">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-warehouse me-1"></i>Current Stock
+                            </label>
+                            <div class="form-control-plaintext bg-light p-2 rounded">
+                                <span id="currentStock" class="fw-bold text-primary">--</span> units
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-chart-line me-1"></i>Current Trend Score
+                            </label>
+                            <div class="form-control-plaintext bg-light p-2 rounded">
+                                <span id="trendScore" class="fw-bold text-success">--</span>/10
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notification_title" class="form-label">
+                            <i class="fas fa-heading me-1"></i>Notification Title
+                        </label>
+                        <input type="text" class="form-control" id="notification_title" name="notification_title" 
+                               placeholder="e.g., Stock Alert for [Product Name]" required>
+                        <div class="form-text">Brief title for the notification</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="admin_recommendation" class="form-label">
+                            <i class="fas fa-lightbulb me-1"></i>Admin Recommendation
+                        </label>
+                        <textarea class="form-control" id="admin_recommendation" name="admin_recommendation" 
+                                  rows="3" placeholder="Enter your recommendation for this product..." required></textarea>
+                        <div class="form-text">Your specific recommendation or instruction</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="notification_type" class="form-label">
+                                <i class="fas fa-tag me-1"></i>Notification Type
+                            </label>
+                            <select class="form-select" id="notification_type" name="notification_type">
+                                <option value="admin_message" selected>📋 Admin Message</option>
+                                <option value="stock_alert">📦 Stock Alert</option>
+                                <option value="price_update">💰 Price Update</option>
+                                <option value="reorder_request">🔄 Reorder Request</option>
+                                <option value="urgent_action">🚨 Urgent Action</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="notification_priority" class="form-label">
+                                <i class="fas fa-exclamation-triangle me-1"></i>Priority Level
+                            </label>
+                            <select class="form-select" id="notification_priority" name="notification_priority">
+                                <option value="low">🟢 Low Priority</option>
+                                <option value="medium" selected>🟡 Medium Priority</option>
+                                <option value="high">🟠 High Priority</option>
+                                <option value="urgent">🔴 Urgent Priority</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <!-- Current time display -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-clock me-1"></i>Notification Time
+                        </label>
+                        <div class="form-control-plaintext bg-light p-2 rounded">
+                            <span id="currentTime" class="fw-bold text-info">Loading...</span>
+                        </div>
+                        <div class="form-text">This notification will be sent with current timestamp</div>
+                    </div>
+                    
+                    <!-- <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Preview:</strong> This notification will be sent to the Inventory Team with:
+                        <ul class="mb-0 mt-2">
+                            <li>Product details (name, category, current stock, trend score)</li>
+                            <li>Your recommendation</li>
+                            <li>Current timestamp</li>
+                            <li>Selected priority level</li>
+                        </ul>
+                    </div> -->
+                    
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="send_copy_to_admin" name="send_copy_to_admin">
+                            <label class="form-check-label" for="send_copy_to_admin">
+                                Keep copy in admin notifications
+                            </label>
+                        </div>
+                        <button type="submit" name="send_notification" class="btn btn-success">
+                            <i class="fas fa-paper-plane me-1"></i>Send to Inventory Team
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Queue Management -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5><i class="fas fa-list-alt"></i> Order Queue</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Product</th>
+                                <th>Qty</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in orders %}
+                            <tr>
+                                <td>{{ order.product.name }}</td>
+                                <td>{{ order.quantity }}</td>
+                                <td>
+                                    <span class="badge status-badge bg-{% if order.status == 'pending' %}warning{% elif order.status == 'ordered' %}info{% else %}success{% endif %}">
+                                        {{ order.status|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if order.status != 'received' %}
+                                    <form method="post" action="{% url 'update_order_status' order.id %}" class="d-inline">
+                                        {% csrf_token %}
+                                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+                                            <option value="pending" {% if order.status == 'pending' %}selected{% endif %}>Pending</option>
+                                            <option value="ordered" {% if order.status == 'ordered' %}selected{% endif %}>Ordered</option>
+                                            <option value="received" {% if order.status == 'received' %}selected{% endif %}>Received</option>
+                                        </select>
+                                    </form>
+                                    {% else %}
+                                    <span class="text-success"><i class="fas fa-check"></i> Complete</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No orders in queue</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification Tracking Section -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow-lg border-0">
+            <div class="card-header bg-gradient-info text-white border-0">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0 fw-bold">
+                            <i class="fas fa-paper-plane me-2"></i>
+                            Sent Notifications Tracking
+                        </h5>
+                        <small class="opacity-75">
+                            <i class="fas fa-eye me-1"></i>
+                            Monitor notification delivery and read status
+                        </small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <div class="notification-stats me-3">
+                            <span class="badge bg-light text-dark me-2">
+                                <i class="fas fa-paper-plane me-1"></i>{{ total_sent }} Sent
+                            </span>
+                            <span class="badge bg-warning me-2">
+                                <i class="fas fa-envelope me-1"></i>{{ unread_notifications }} Unread
+                            </span>
+                            <span class="badge bg-success">
+                                <i class="fas fa-envelope-open me-1"></i>{{ read_notifications }} Read
+                            </span>
+                        </div>
+                        <button class="btn btn-outline-light btn-sm me-2" onclick="location.reload()" title="Refresh to see latest status">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#notificationTracking">
+                            <i class="fas fa-chevron-down"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="collapse show" id="notificationTracking">
+                <div class="card-body p-0">
+                    {% if sent_notifications %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="border-0">Notification</th>
+                                    <th class="border-0">Target</th>
+                                    <th class="border-0">Priority</th>
+                                    <th class="border-0">Sent Time</th>
+                                    <th class="border-0">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for notification in sent_notifications %}
+                                <tr class="notification-row {% if not notification.is_read %}unread-notification{% endif %}">
+                                    <td>
+                                        <div class="notification-info">
+                                            <div class="fw-bold text-dark">{{ notification.title }}</div>
+                                            <div class="text-muted small">{{ notification.message|truncatechars:80 }}</div>
+                                            {% if notification.product %}
+                                            <div class="text-info small">
+                                                <i class="fas fa-box me-1"></i>{{ notification.product.name }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">
+                                            <i class="fas fa-users me-1"></i>
+                                            {{ notification.target_user_role|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge priority-badge-{{ notification.priority }}">
+                                            {% if notification.priority == 'urgent' %}
+                                                <i class="fas fa-fire me-1"></i>URGENT
+                                            {% elif notification.priority == 'high' %}
+                                                <i class="fas fa-exclamation-triangle me-1"></i>HIGH
+                                            {% elif notification.priority == 'medium' %}
+                                                <i class="fas fa-info-circle me-1"></i>MEDIUM
+                                            {% else %}
+                                                <i class="fas fa-bell me-1"></i>LOW
+                                            {% endif %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="time-info">
+                                            <div class="fw-bold">{{ notification.created_at|date:"M d, Y" }}</div>
+                                            <div class="text-muted small">{{ notification.created_at|time:"H:i" }}</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if notification.is_read %}
+                                            <div class="status-read">
+                                                <i class="fas fa-check-circle text-success me-2"></i>
+                                                <span class="text-success fw-bold">READ</span>
+                                                <div class="text-muted small">
+                                                    Read: {{ notification.safe_updated_at|date:"M d, H:i" }}
+                                                </div>
+                                            </div>
+                                        {% else %}
+                                            <div class="status-unread">
+                                                <i class="fas fa-envelope text-warning me-2"></i>
+                                                <span class="text-warning fw-bold">UNREAD</span>
+                                                <div class="text-muted small">Pending</div>
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Debug Information -->
+                    <div class="mt-3">
+                        <div class="alert alert-light">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Debug Info:</strong> 
+                                Total sent: {{ total_sent }} | 
+                                Unread: {{ unread_notifications }} | 
+                                Read: {{ read_notifications }} |
+                                <strong>Recent notifications are automatically sent to inventory team</strong>
+                                <br>
+                                <strong>Refresh this page to see latest read status updates</strong>
+                            </small>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-paper-plane fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Notifications Sent Yet</h5>
+                        <p class="text-muted">Use the form above to send notifications to your team.</p>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="card-footer bg-light border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Notifications are automatically marked as read when team members acknowledge them
+                        </small>
+                        <div>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
+                                <i class="fas fa-sync-alt me-1"></i>Refresh Status
+                            </button>
+                            <small class="text-muted ms-2">
+                                Last updated: <span id="lastUpdated">{{ "now"|date:"H:i:s" }}</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Total Products</h5>
+                        <h3>{{ stock_analysis|length }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-boxes fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Overstock</h5>
+                        <h3>{{ overstock_count }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Reorder Needed</h5>
+                        <h3>{{ reorder_count }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-shopping-cart fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5>Pending Orders</h5>
+                        <h3>{{ orders|length }}</h3>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setDiscountProduct(productId, productName) {
+    const productSelect = document.querySelector('select[name="product"]');
+    productSelect.value = productId;
+    
+    // Scroll to discount form
+    document.querySelector('.card-header .fa-tags').closest('.card').scrollIntoView({
+        behavior: 'smooth'
+    });
+}
+
+// Update current time display
+function updateCurrentTime() {
+    const now = new Date();
+    const timeString = now.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    const currentTimeElement = document.getElementById('currentTime');
+    if (currentTimeElement) {
+        currentTimeElement.textContent = timeString;
+    }
+}
+
+// Update product information when product name changes
+function updateProductInfo() {
+    const productName = document.getElementById('product_name').value.trim();
+    const productInfoSection = document.getElementById('productInfoSection');
+    const currentStockElement = document.getElementById('currentStock');
+    const trendScoreElement = document.getElementById('trendScore');
+    
+    if (productName.length > 2) {
+        // Show loading state
+        currentStockElement.textContent = 'Loading...';
+        trendScoreElement.textContent = 'Loading...';
+        productInfoSection.style.display = 'block';
+        
+        // Find matching product from the products list
+        const products = [
+            {% for product in products %}
+            {
+                name: '{{ product.name }}',
+                category: '{{ product.category }}',
+                stock: {{ product.total_stock }},
+                trendScore: {{ product.trend_score|floatformat:1 }}
+            },
+            {% endfor %}
+        ];
+        
+        // Find exact or partial match
+        const matchedProduct = products.find(p => 
+            p.name.toLowerCase().includes(productName.toLowerCase()) ||
+            productName.toLowerCase().includes(p.name.toLowerCase())
+        );
+        
+        if (matchedProduct) {
+            currentStockElement.textContent = matchedProduct.stock;
+            currentStockElement.className = 'fw-bold text-success';
+            
+            trendScoreElement.textContent = matchedProduct.trendScore;
+            if (matchedProduct.trendScore >= 7) {
+                trendScoreElement.className = 'fw-bold text-success';
+            } else if (matchedProduct.trendScore >= 4) {
+                trendScoreElement.className = 'fw-bold text-warning';
+            } else {
+                trendScoreElement.className = 'fw-bold text-danger';
+            }
+            
+            // Auto-fill category if empty
+            const categoryField = document.getElementById('product_category');
+            if (!categoryField.value) {
+                categoryField.value = matchedProduct.category;
+            }
+        } else {
+            currentStockElement.textContent = 'Not found';
+            currentStockElement.className = 'fw-bold text-muted';
+            trendScoreElement.textContent = 'N/A';
+            trendScoreElement.className = 'fw-bold text-muted';
+        }
+    } else {
+        productInfoSection.style.display = 'none';
+    }
+}
+
+// Validate notification form before submission
+function validateNotificationForm() {
+    const productName = document.getElementById('product_name').value.trim();
+    const productCategory = document.getElementById('product_category').value.trim();
+    const title = document.getElementById('notification_title').value.trim();
+    const recommendation = document.getElementById('admin_recommendation').value.trim();
+    
+    if (!productName) {
+        showAdminToast('Validation Error', 'Please enter a product name.', 'error');
+        document.getElementById('product_name').focus();
+        return false;
+    }
+    
+    if (!productCategory) {
+        showAdminToast('Validation Error', 'Please enter a product category.', 'error');
+        document.getElementById('product_category').focus();
+        return false;
+    }
+    
+    if (!title) {
+        showAdminToast('Validation Error', 'Please enter a notification title.', 'error');
+        document.getElementById('notification_title').focus();
+        return false;
+    }
+    
+    if (!recommendation) {
+        showAdminToast('Validation Error', 'Please enter your recommendation.', 'error');
+        document.getElementById('admin_recommendation').focus();
+        return false;
+    }
+    
+    // Show loading state on button
+    const button = event.target;
+    const originalContent = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+    button.disabled = true;
+    
+    // Re-enable button after a delay (in case of errors)
+    setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.disabled = false;
+    }, 5000);
+    
+    showAdminToast('Sending Notification', 'Your detailed notification is being sent to the inventory team...', 'info');
+    return true;
+}
+
+// Initialize time updates
+document.addEventListener('DOMContentLoaded', function() {
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 1000); // Update every second
+});
+
+// Admin toast notification function
+function showAdminToast(title, message, type = 'info') {
+    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
+    const toastId = 'admin-toast-' + Date.now();
+    
+    const toastHTML = `
+        <div id="${toastId}" class="toast admin-toast" role="alert">
+            <div class="toast-header bg-${type} text-white">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
+                <strong class="me-auto">${title}</strong>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+    
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 4000 });
+    toast.show();
+    
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        this.remove();
+    });
+}
+
+function createToastContainer() {
+    const container = document.createElement('div');
+    container.className = 'toast-container position-fixed top-0 end-0 p-3';
+    container.style.zIndex = '9999';
+    document.body.appendChild(container);
+    return container;
+}
+
+// Auto-refresh notification status every 2 minutes
+setInterval(() => {
+    if (document.hasFocus()) {
+        // Update read status indicators without full page reload
+        updateNotificationStatus();
+    }
+}, 120000);
+
+// Auto-refresh every 30 seconds if there are unread notifications
+{% if unread_notifications > 0 %}
+setInterval(() => {
+    if (document.hasFocus()) {
+        console.log('Auto-refreshing admin dashboard for unread notifications...');
+        location.reload();
+    }
+}, 30000); // 30 seconds
+{% endif %}
+
+function updateNotificationStatus() {
+    // This would typically make an AJAX call to check for status updates
+    // For now, just update the timestamp
+    const refreshButton = document.querySelector('button[onclick="refreshNotificationStatus()"]');
+    if (refreshButton) {
+        const now = new Date().toLocaleTimeString();
+        refreshButton.title = `Last checked: ${now}`;
+    }
+}
+</script>
+
+<style>
+/* Notification tracking styles */
+.bg-gradient-info {
+    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+}
+
+.notification-row {
+    transition: all 0.3s ease;
+}
+
+.notification-row:hover {
+    background-color: #f8f9fa;
+    transform: translateX(2px);
+}
+
+.unread-notification {
+    border-left: 4px solid #ffc107;
+    background-color: rgba(255, 193, 7, 0.05);
+}
+
+.notification-info {
+    max-width: 300px;
+}
+
+.priority-badge-urgent {
+    background: linear-gradient(45deg, #dc3545, #c82333);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.priority-badge-high {
+    background: linear-gradient(45deg, #fd7e14, #e55a00);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.priority-badge-medium {
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.priority-badge-low {
+    background: linear-gradient(45deg, #6c757d, #545b62);
+    color: white;
+    padding: 0.25rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-read, .status-unread {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+}
+
+.time-info {
+    text-align: center;
+}
+
+.notification-stats .badge {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.admin-toast {
+    min-width: 300px;
+    border: none;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.btn-group .btn {
+    border-radius: 4px;
+}
+
+.btn-group .btn:not(:last-child) {
+    margin-right: 2px;
+}
+
+/* Condition badges */
+.condition-normal { background-color: #28a745; color: white; }
+.condition-reorderneeded { background-color: #ffc107; color: #212529; }
+.condition-nearexpiry { background-color: #fd7e14; color: white; }
+.condition-expired { background-color: #dc3545; color: white; }
+.condition-overstock { background-color: #6f42c1; color: white; }
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .notification-info {
+        max-width: 200px;
+    }
+    
+    .notification-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .notification-stats .badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+</style>
+{% endblock %}
