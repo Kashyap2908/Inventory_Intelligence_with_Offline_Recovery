@@ -40,6 +40,28 @@ def test_ai_connection():
     except Exception as e:
         return False, f"Connection failed: {str(e)}"
 
+def get_next_bill_number():
+    """Generate the next sequential bill number for both single and multi-product bills"""
+    # Get all bills with BILL- format to find the highest number
+    bills_with_standard_format = SalesBill.objects.filter(
+        bill_number__startswith='BILL-'
+    ).order_by('-bill_number')
+    
+    if bills_with_standard_format.exists():
+        # Extract the highest number from BILL-XXXXXX format
+        try:
+            latest_standard_bill = bills_with_standard_format.first()
+            last_number = int(latest_standard_bill.bill_number.split('-')[1])
+            next_number = last_number + 1
+        except (ValueError, IndexError):
+            # Fallback to counting all bills + 1
+            next_number = SalesBill.objects.count() + 1
+    else:
+        # No standard format bills exist, start from 1
+        next_number = 1
+    
+    return f"BILL-{next_number:06d}"
+
 def auto_remove_expired_products():
     """Automatically remove expired products and create notifications"""
     from datetime import date
@@ -96,8 +118,62 @@ def auto_remove_expired_products():
     
     return removed_count, total_quantity_removed
 
+def update_stock_notifications_for_product(product):
+    """Update stock notifications for a specific product when stock changes"""
+    from datetime import date
+    
+    # Refresh product data from database
+    product.refresh_from_db()
+    current_stock = product.total_stock
+    
+    # Remove existing stock notifications for this product
+    Notification.objects.filter(
+        product=product,
+        notification_type='low_stock'
+    ).delete()
+    
+    # Create new notification if stock is low
+    if current_stock < 20:  # Low stock threshold
+        # Get detailed stock information
+        valid_batches = product.expirystock_set.filter(
+            quantity__gt=0,
+            expiry_date__gte=date.today()
+        )
+        
+        # Create detailed stock breakdown
+        stock_details = []
+        for batch in valid_batches:
+            days_to_expiry = (batch.expiry_date - date.today()).days
+            stock_details.append(f"• {batch.quantity} units (expires in {days_to_expiry} days)")
+        
+        stock_breakdown = "\n".join(stock_details) if stock_details else "No valid stock available"
+        
+        if current_stock == 0:
+            priority = 'urgent'
+            title = f"🚨 OUT OF STOCK: {product.name}"
+            action_message = "IMMEDIATE ACTION REQUIRED: Product is completely out of stock!"
+        elif current_stock < 5:
+            priority = 'high'
+            title = f"⚠️ CRITICAL LOW: {product.name} ({current_stock} units)"
+            action_message = "URGENT: Stock is critically low!"
+        else:
+            priority = 'medium'
+            title = f"📦 Low Stock: {product.name} ({current_stock} units)"
+            action_message = "Consider reordering soon to avoid stockout"
+        
+        message = f"Product: {product.name}\nCurrent Stock: {current_stock} units\n\nStock Breakdown:\n{stock_breakdown}\n\n{action_message}\nRecommendation: Reorder immediately to maintain adequate inventory levels"
+        
+        Notification.objects.create(
+            title=title,
+            message=message,
+            notification_type='low_stock',
+            priority=priority,
+            target_user_role='inventory',
+            product=product
+        )
+
 def generate_notifications():
-    """Generate automatic notifications for inventory management"""
+    """Generate automatic notifications for inventory management with accurate stock quantities"""
     from datetime import date, timedelta
     
     # First, automatically remove expired products
@@ -112,10 +188,21 @@ def generate_notifications():
     )
     old_notifications.delete()
     
+    # Clear outdated stock notifications (older than 1 day) to prevent stale data
+    outdated_stock_notifications = Notification.objects.filter(
+        notification_type='low_stock',
+        created_at__lt=timezone.now() - timedelta(days=1)
+    )
+    outdated_stock_notifications.delete()
+    
     # Get all products with stock
     products = Product.objects.all()
     
     for product in products:
+        # Get real-time stock quantity (refresh from database)
+        product.refresh_from_db()
+        current_stock = product.total_stock
+        
         # Check for expiry warnings (products expiring in next 15 days)
         near_expiry_stock = product.expirystock_set.filter(
             quantity__gt=0,
@@ -156,9 +243,8 @@ def generate_notifications():
                     product=product
                 )
         
-        # Check for low stock warnings
-        total_stock = product.total_stock
-        if total_stock < 20:  # Low stock threshold
+        # Check for low stock warnings with accurate current stock
+        if current_stock < 20:  # Low stock threshold
             existing_low_stock = Notification.objects.filter(
                 product=product,
                 notification_type='low_stock',
@@ -166,17 +252,34 @@ def generate_notifications():
             ).exists()
             
             if not existing_low_stock:
-                if total_stock == 0:
+                # Get detailed stock information for accurate reporting
+                valid_batches = product.expirystock_set.filter(
+                    quantity__gt=0,
+                    expiry_date__gte=date.today()
+                )
+                
+                # Create detailed stock breakdown
+                stock_details = []
+                for batch in valid_batches:
+                    days_to_expiry = (batch.expiry_date - date.today()).days
+                    stock_details.append(f"• {batch.quantity} units (expires in {days_to_expiry} days)")
+                
+                stock_breakdown = "\n".join(stock_details) if stock_details else "No valid stock available"
+                
+                if current_stock == 0:
                     priority = 'urgent'
                     title = f"🚨 OUT OF STOCK: {product.name}"
-                elif total_stock < 5:
+                    action_message = "IMMEDIATE ACTION REQUIRED: Product is completely out of stock!"
+                elif current_stock < 5:
                     priority = 'high'
-                    title = f"⚠️ CRITICAL LOW: {product.name} ({total_stock} units)"
+                    title = f"⚠️ CRITICAL LOW: {product.name} ({current_stock} units)"
+                    action_message = "URGENT: Stock is critically low!"
                 else:
                     priority = 'medium'
-                    title = f"📦 Low Stock: {product.name} ({total_stock} units)"
+                    title = f"📦 Low Stock: {product.name} ({current_stock} units)"
+                    action_message = "Consider reordering soon to avoid stockout"
                 
-                message = f"Product: {product.name}\nCurrent Stock: {total_stock} units\nRecommendation: Reorder immediately to avoid stockout"
+                message = f"Product: {product.name}\nCurrent Stock: {current_stock} units\n\nStock Breakdown:\n{stock_breakdown}\n\n{action_message}\nRecommendation: Reorder immediately to maintain adequate inventory levels"
                 
                 Notification.objects.create(
                     title=title,
@@ -339,7 +442,9 @@ def inventory_dashboard(request):
         elif 'add_stock' in request.POST:
             stock_form = StockEntryForm(request.POST)
             if stock_form.is_valid():
-                stock_form.save()
+                stock_entry = stock_form.save()
+                # Update stock notifications for the product
+                update_stock_notifications_for_product(stock_entry.product)
                 messages.success(request, 'Stock added successfully!')
                 return redirect('inventory_dashboard')
         
@@ -1240,6 +1345,8 @@ def update_order_status(request, order_id):
                 quantity=order.quantity,
                 expiry_date=date.today() + timedelta(days=365)  # Default 1 year expiry
             )
+            # Update stock notifications for the product
+            update_stock_notifications_for_product(order.product)
             messages.success(request, f'Order received and stock updated for {order.product.name}!')
     
     return redirect('admin_dashboard')
@@ -1247,62 +1354,185 @@ def update_order_status(request, order_id):
 @login_required
 def billing(request):
     if request.method == 'POST':
-        sales_form = SalesForm(request.POST)
-        if sales_form.is_valid():
-            product = sales_form.cleaned_data['product']
-            quantity = sales_form.cleaned_data['quantity']
-            
-            # Check available non-expired stock only
-            available_stock = product.total_stock  # This now excludes expired stock
-            
-            if available_stock >= quantity:
+        # Handle multi-product billing
+        products_data = request.POST.get('products_data')
+        
+        if products_data:
+            try:
+                import json
                 from decimal import Decimal
+                
+                products = json.loads(products_data)
+                
+                if not products:
+                    messages.error(request, '❌ No products selected for billing')
+                    return redirect('billing')
+                
+                # Calculate total amount
+                total_amount = Decimal('0.00')
+                for product_data in products:
+                    total_amount += Decimal(str(product_data['total']))
+                
+                # Create sequential bill number using unified function
+                bill_number = get_next_bill_number()
                 
                 # Create bill
                 bill = SalesBill.objects.create(
-                    bill_number=f"BILL-{SalesBill.objects.count() + 1:06d}",
-                    total_amount=product.new_price * Decimal(str(quantity))
+                    bill_number=bill_number,
+                    total_amount=total_amount
                 )
                 
-                # Create bill item
-                SalesBillItem.objects.create(
-                    bill=bill,
-                    product=product,
-                    quantity=quantity,
-                    price=product.new_price,
-                    total=product.new_price * Decimal(str(quantity))
-                )
+                # Process each product
+                insufficient_stock_products = []
+                successful_products = []
                 
-                # FEFO stock deduction (only from non-expired stock)
-                remaining_qty = quantity
-                from datetime import date
-                stock_batches = product.expirystock_set.filter(
-                    quantity__gt=0,
-                    expiry_date__gte=date.today()  # Only non-expired stock
-                ).order_by('expiry_date')
-                
-                for batch in stock_batches:
-                    if remaining_qty <= 0:
-                        break
+                for product_data in products:
+                    try:
+                        # Get product by name
+                        product = Product.objects.get(name=product_data['name'])
+                        quantity = int(product_data['quantity'])
+                        unit_price = Decimal(str(product_data['unitPrice']))
+                        item_total = Decimal(str(product_data['total']))
+                        
+                        # Check available stock
+                        available_stock = product.total_stock
+                        
+                        if available_stock >= quantity:
+                            # Create bill item
+                            SalesBillItem.objects.create(
+                                bill=bill,
+                                product=product,
+                                quantity=quantity,
+                                price=unit_price,
+                                total=item_total
+                            )
+                            
+                            # AUTOMATIC INVENTORY DEDUCTION using FEFO
+                            remaining_qty = quantity
+                            from datetime import date
+                            
+                            stock_batches = product.expirystock_set.filter(
+                                quantity__gt=0,
+                                expiry_date__gte=date.today()
+                            ).order_by('expiry_date')
+                            
+                            for batch in stock_batches:
+                                if remaining_qty <= 0:
+                                    break
+                                
+                                if batch.quantity >= remaining_qty:
+                                    batch.quantity -= remaining_qty
+                                    remaining_qty = 0
+                                else:
+                                    remaining_qty -= batch.quantity
+                                    batch.quantity = 0
+                                
+                                batch.save()
+                            
+                            successful_products.append(f"{product.name} ({quantity} units)")
+                            
+                            # Update stock notifications for this product
+                            update_stock_notifications_for_product(product)
+                            
+                        else:
+                            insufficient_stock_products.append(f"{product.name} (Available: {available_stock}, Requested: {quantity})")
                     
-                    if batch.quantity >= remaining_qty:
-                        batch.quantity -= remaining_qty
-                        remaining_qty = 0
+                    except Product.DoesNotExist:
+                        insufficient_stock_products.append(f"{product_data['name']} (Product not found)")
+                    except Exception as e:
+                        insufficient_stock_products.append(f"{product_data['name']} (Error: {str(e)})")
+                
+                # Create notifications for successful sales
+                if successful_products:
+                    Notification.objects.create(
+                        title=f"MULTI-PRODUCT SALE: Bill #{bill.bill_number}",
+                        message=f"Multi-product bill created successfully!\n"
+                               f"Products sold: {', '.join(successful_products)}\n"
+                               f"Total Amount: ₹{bill.total_amount}\n"
+                               f"Inventory automatically updated using FEFO method.",
+                        notification_type='admin_message',
+                        priority='medium',
+                        target_user_role='inventory'
+                    )
+                
+                # Show results
+                if insufficient_stock_products:
+                    if successful_products:
+                        messages.warning(request, f'⚠️ Partial success! Bill #{bill.bill_number} created for available products. Insufficient stock for: {", ".join(insufficient_stock_products)}')
                     else:
-                        remaining_qty -= batch.quantity
-                        batch.quantity = 0
-                    
-                    batch.save()
+                        # Delete the bill if no products were processed
+                        bill.delete()
+                        messages.error(request, f'❌ Cannot create bill! Insufficient stock for: {", ".join(insufficient_stock_products)}')
+                else:
+                    messages.success(request, f'✅ Multi-product bill #{bill.bill_number} created successfully! Total: ₹{bill.total_amount} | All quantities automatically deducted from inventory')
                 
-                messages.success(request, f'Sale completed! Bill #{bill.bill_number}')
                 return redirect('billing')
-            else:
-                messages.error(request, f'Insufficient stock! Available: {available_stock} units (expired stock excluded)')
+                
+            except json.JSONDecodeError:
+                messages.error(request, '❌ Invalid product data format')
+                return redirect('billing')
+            except Exception as e:
+                messages.error(request, f'❌ Error creating bill: {str(e)}')
+                return redirect('billing')
+        
+        else:
+            # Handle single product billing (legacy support)
+            sales_form = SalesForm(request.POST)
+            if sales_form.is_valid():
+                product = sales_form.cleaned_data['product']
+                quantity = sales_form.cleaned_data['quantity']
+                
+                available_stock = product.total_stock
+                
+                if available_stock >= quantity:
+                    from decimal import Decimal
+                    
+                    # Create sequential bill number using unified function
+                    bill_number = get_next_bill_number()
+                    
+                    bill = SalesBill.objects.create(
+                        bill_number=bill_number,
+                        total_amount=product.new_price * Decimal(str(quantity))
+                    )
+                    
+                    SalesBillItem.objects.create(
+                        bill=bill,
+                        product=product,
+                        quantity=quantity,
+                        price=product.new_price,
+                        total=product.new_price * Decimal(str(quantity))
+                    )
+                    
+                    # FEFO stock deduction
+                    remaining_qty = quantity
+                    from datetime import date
+                    stock_batches = product.expirystock_set.filter(
+                        quantity__gt=0,
+                        expiry_date__gte=date.today()
+                    ).order_by('expiry_date')
+                    
+                    for batch in stock_batches:
+                        if remaining_qty <= 0:
+                            break
+                        
+                        if batch.quantity >= remaining_qty:
+                            batch.quantity -= remaining_qty
+                            remaining_qty = 0
+                        else:
+                            remaining_qty -= batch.quantity
+                            batch.quantity = 0
+                        
+                        batch.save()
+                    
+                    messages.success(request, f'✅ Single product bill #{bill.bill_number} created successfully!')
+                    return redirect('billing')
+                else:
+                    messages.error(request, f'❌ Insufficient stock! Available: {available_stock} units')
     
+    # Render the multi-product billing template
     sales_form = SalesForm()
     recent_bills = SalesBill.objects.prefetch_related('items__product').order_by('-created_at')[:10]
     
-    # Calculate today's sales properly
     from datetime import date
     from django.db.models import Sum
     
@@ -1311,7 +1541,6 @@ def billing(request):
     today_sales_count = today_bills.count()
     today_sales_amount = today_bills.aggregate(total=Sum('total_amount'))['total'] or 0
     
-    # Calculate current month's sales
     current_month = today.month
     current_year = today.year
     monthly_bills = SalesBill.objects.filter(
@@ -1328,9 +1557,11 @@ def billing(request):
         'today_sales_amount': today_sales_amount,
         'monthly_sales_count': monthly_sales_count,
         'monthly_sales_amount': monthly_sales_amount,
-        'current_month_name': today.strftime('%B %Y'),  # e.g., "February 2026"
+        'current_month_name': today.strftime('%B %Y'),
     }
-    return render(request, 'billing.html', context)
+    
+    # Use the new multi-product template
+    return render(request, 'billing_multi_product.html', context)
 
 @login_required
 def get_bill_details(request, bill_id):
@@ -1358,18 +1589,19 @@ def get_bill_details(request, bill_id):
 
 @login_required
 def get_product_details(request, product_id):
-    """AJAX endpoint to get product stock details"""
+    """AJAX endpoint to get product stock details with exact inventory quantities"""
     try:
         product = Product.objects.get(id=product_id)
         from datetime import date
         
-        # Only get non-expired stock batches
+        # Get exact inventory quantities (non-expired stock batches)
         stock_batches = product.expirystock_set.filter(
             quantity__gt=0,
             expiry_date__gte=date.today()  # Only non-expired stock
         ).order_by('expiry_date')
         
         batches_data = []
+        total_available = 0
         for batch in stock_batches:
             days_to_expiry = (batch.expiry_date - date.today()).days
             batches_data.append({
@@ -1377,6 +1609,7 @@ def get_product_details(request, product_id):
                 'expiry_date': batch.expiry_date.strftime('%b %d, %Y'),
                 'days_to_expiry': days_to_expiry
             })
+            total_available += batch.quantity
         
         # Check if there's expired stock
         expired_stock = product.expired_stock
@@ -1384,19 +1617,50 @@ def get_product_details(request, product_id):
         product_data = {
             'name': product.name,
             'category': product.category,
-            'total_stock': product.total_stock,  # This now excludes expired stock
+            'total_stock': total_available,  # Exact quantity available for billing
             'expired_stock': expired_stock,
             'current_price': str(product.new_price),
             'selling_price': str(product.selling_price),
             'cost_price': str(product.cost_price),
             'abc_classification': product.calculated_abc_classification,
             'trend_score': float(product.trend_score),
-            'batches': batches_data
+            'batches': batches_data,
+            'max_sellable_quantity': total_available,  # Maximum quantity that can be sold
+            'inventory_message': f"Inventory has {total_available} units available for sale"
         }
         
         return JsonResponse(product_data)
     except Product.DoesNotExist:
         return JsonResponse({'error': 'Product not found'}, status=404)
+
+@login_required
+def search_products_api(request):
+    """API endpoint to search products with their exact inventory quantities"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query:
+        return JsonResponse({'products': []})
+    
+    # Search products by name
+    products = Product.objects.filter(
+        name__icontains=query
+    ).order_by('name')[:10]
+    
+    products_data = []
+    for product in products:
+        # Get exact available quantity for each product
+        available_qty = product.total_stock
+        
+        products_data.append({
+            'id': product.id,
+            'name': product.name,
+            'category': product.category,
+            'available_quantity': available_qty,
+            'price': str(product.new_price),
+            'display_text': f"{product.name} (Available: {available_qty} units)"
+        })
+    
+    return JsonResponse({'products': products_data})
 
 @login_required
 def mark_notification_read(request, notification_id):
@@ -1657,3 +1921,13 @@ def dismiss_recommendation(request):
             })
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
+
+@login_required
+def test_eye_icon(request):
+    """Test page for eye icon functionality"""
+    from django.http import HttpResponse
+    
+    with open('test_eye_icon.html', 'r') as f:
+        content = f.read()
+    
+    return HttpResponse(content)

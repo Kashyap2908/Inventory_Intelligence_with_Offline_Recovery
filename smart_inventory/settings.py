@@ -7,7 +7,22 @@ SECRET_KEY = 'django-insecure-your-secret-key-here-change-in-production'
 
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '10.55.157.192',
+    # Professional Local Domains
+    'neurostock.local',
+    'neurostock-ai.local',
+    'inventory.neurostock',
+    'smart-inventory.local',
+    'neuroinventory.local',
+    'ns.local',
+    'neuro.local',
+    'stock.local',
+    'ai.local',
+    '*'  # Keep for development
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',

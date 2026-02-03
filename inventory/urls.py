@@ -17,6 +17,8 @@ urlpatterns = [
     path('create-order/', views.create_order, name='create_order'),
     path('update-order/<int:order_id>/', views.update_order_status, name='update_order_status'),
     path('api/search-products/', views.search_products, name='search_products'),
+    path('api/search-products-billing/', views.search_products_api, name='search_products_api'),  # New API for billing
     path('apply-recommendation/', views.apply_recommendation, name='apply_recommendation'),
     path('dismiss-recommendation/', views.dismiss_recommendation, name='dismiss_recommendation'),
+    path('test-eye-icon/', views.test_eye_icon, name='test_eye_icon'),  # Test page for eye icon
 ]
