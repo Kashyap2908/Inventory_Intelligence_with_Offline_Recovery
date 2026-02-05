@@ -3,7 +3,8 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Q
+from django.db import models
 from django.utils import timezone
 from datetime import date, timedelta
 import json
@@ -291,9 +292,23 @@ def generate_notifications():
                 )
 
 def user_login(request):
+    # If user is already logged in, redirect to their dashboard
+    if request.user.is_authenticated:
+        try:
+            profile = request.user.userprofile
+            if profile.role == 'inventory':
+                return redirect('inventory_dashboard')
+            elif profile.role == 'marketing':
+                return redirect('trend_dashboard')
+            elif profile.role == 'admin':
+                return redirect('admin_dashboard')
+        except UserProfile.DoesNotExist:
+            return redirect('inventory_dashboard')
+    
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
+        remember_me = request.POST.get('remember_me')  # Check if remember me is checked
         
         if not username or not password:
             messages.error(request, 'Please provide both username and password.')
@@ -304,6 +319,15 @@ def user_login(request):
         
         if user is not None:
             login(request, user)
+            
+            # Set session expiry based on remember me checkbox
+            if remember_me:
+                # Remember for 30 days
+                request.session.set_expiry(60 * 60 * 24 * 30)
+            else:
+                # Remember until browser closes (but still keep for 7 days minimum)
+                request.session.set_expiry(60 * 60 * 24 * 7)
+            
             try:
                 profile = user.userprofile
                 messages.success(request, f'Welcome back, {user.first_name or user.username}!')
@@ -321,6 +345,19 @@ def user_login(request):
     return render(request, 'login.html')
 
 def user_signup(request):
+    # If user is already logged in, redirect to their dashboard
+    if request.user.is_authenticated:
+        try:
+            profile = request.user.userprofile
+            if profile.role == 'inventory':
+                return redirect('inventory_dashboard')
+            elif profile.role == 'marketing':
+                return redirect('trend_dashboard')
+            elif profile.role == 'admin':
+                return redirect('admin_dashboard')
+        except UserProfile.DoesNotExist:
+            return redirect('inventory_dashboard')
+    
     if request.method == 'POST':
         username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
@@ -377,6 +414,9 @@ def user_signup(request):
             # Auto-login the new user
             login(request, user)
             
+            # Set persistent session for new users (30 days by default)
+            request.session.set_expiry(60 * 60 * 24 * 30)
+            
             # Redirect to appropriate dashboard based on role
             messages.success(request, f'🎉 Welcome to NeuroStock, {username}! Your account has been created successfully.')
             
@@ -402,11 +442,28 @@ def inventory_dashboard(request):
     products = Product.objects.all()
     recent_stock = ExpiryStock.objects.order_by('-created_at')[:10]
     
-    # Get unread notifications for inventory role
+    # Get unread notifications for inventory role with proper priority ordering
+    # Prioritize admin messages first, then by priority, then by creation date
+    from django.db.models import Case, When, IntegerField
+    
     notifications_queryset = Notification.objects.filter(
         target_user_role__in=['inventory', 'all'],
         is_read=False
-    ).order_by('-priority', '-created_at')
+    ).annotate(
+        priority_order=Case(
+            When(priority='urgent', then=4),
+            When(priority='high', then=3),
+            When(priority='medium', then=2),
+            When(priority='low', then=1),
+            default=0,
+            output_field=IntegerField()
+        ),
+        admin_priority=Case(
+            When(notification_type='admin_message', then=1),
+            default=0,
+            output_field=IntegerField()
+        )
+    ).order_by('-admin_priority', '-priority_order', '-created_at')
     
     # Get read notifications for history (last 20)
     try:
@@ -443,9 +500,47 @@ def inventory_dashboard(request):
             stock_form = StockEntryForm(request.POST)
             if stock_form.is_valid():
                 stock_entry = stock_form.save()
+                
+                # Check if there are pending orders for this product
+                pending_orders = OrderQueue.objects.filter(
+                    product=stock_entry.product,
+                    status__in=['pending', 'ordered'],
+                    message_received=True  # Only for acknowledged orders
+                )
+                
+                # Notify admin about stock addition for ordered products
+                for order in pending_orders:
+                    if order.ordered_by:  # Make sure there's an admin who ordered it
+                        Notification.objects.create(
+                            title=f"📦 STOCK RECEIVED: {stock_entry.product.name}",
+                            message=f"Inventory team has added stock for your order:\n\n"
+                                   f"Product: {stock_entry.product.name}\n"
+                                   f"Stock Added: {stock_entry.quantity} units\n"
+                                   f"Expiry Date: {stock_entry.expiry_date.strftime('%B %d, %Y')}\n"
+                                   f"New Total Stock: {stock_entry.product.total_stock} units\n"
+                                   f"Added by: {request.user.first_name or request.user.username}\n"
+                                   f"Added at: {timezone.now().strftime('%B %d, %Y at %H:%M')}\n\n"
+                                   f"Original Order Details:\n"
+                                   f"Requested Quantity: {order.quantity} units\n"
+                                   f"Order Date: {order.created_at.strftime('%B %d, %Y')}\n"
+                                   f"Order ID: #{order.id}\n\n"
+                                   f"✅ Your order request has been fulfilled!",
+                            notification_type='stock_received',
+                            priority='medium',
+                            target_user_role='admin',
+                            product=stock_entry.product
+                        )
+                
                 # Update stock notifications for the product
                 update_stock_notifications_for_product(stock_entry.product)
-                messages.success(request, 'Stock added successfully!')
+                
+                # Show success message with order context if applicable
+                if pending_orders.exists():
+                    order_count = pending_orders.count()
+                    messages.success(request, f'✅ Stock added successfully! Admin has been notified about {order_count} pending order(s) for {stock_entry.product.name}.')
+                else:
+                    messages.success(request, '✅ Stock added successfully!')
+                
                 return redirect('inventory_dashboard')
         
         elif 'mark_read' in request.POST or request.POST.get('notification_id'):
@@ -555,6 +650,24 @@ def inventory_dashboard(request):
     product_form = ProductForm()
     stock_form = StockEntryForm()
     
+    # Add product order data for JavaScript
+    products_with_orders = []
+    for product in products:
+        # Count only orders that were actually created by admin and are still pending/ordered
+        pending_orders_count = OrderQueue.objects.filter(
+            product=product,
+            status__in=['pending', 'ordered'],
+            ordered_by__isnull=False,  # Only admin-created orders
+            message_received=True  # Only acknowledged orders
+        ).count()
+        
+        products_with_orders.append({
+            'id': product.id,
+            'name': product.name,
+            'stock': product.total_stock,
+            'pending_orders': pending_orders_count
+        })
+    
     context = {
         'products': products,
         'recent_stock': recent_stock,
@@ -565,7 +678,9 @@ def inventory_dashboard(request):
         'urgent_count': urgent_count,
         'high_count': high_count,
         'total_notifications': total_notifications,
+        'products_with_orders': products_with_orders,
     }
+    
     return render(request, 'inventory_dashboard.html', context)
 
 @login_required
@@ -1078,6 +1193,10 @@ def enhanced_simulation_update(request, products):
 
 @login_required
 def admin_dashboard(request):
+    print(f"🔧 DEBUG: Admin dashboard accessed by user: {request.user.username}")
+    print(f"🔧 DEBUG: Request method: {request.method}")
+    print(f"🔧 DEBUG: POST data: {dict(request.POST) if request.method == 'POST' else 'N/A'}")
+    
     products = Product.objects.all()
     
     # Stock intelligence analysis
@@ -1122,7 +1241,10 @@ def admin_dashboard(request):
     sent_notifications = sent_notifications_queryset[:20]
     
     if request.method == 'POST':
+        print(f"🔧 DEBUG: Processing POST request...")
+        
         if 'apply_discount' in request.POST:
+            print(f"🔧 DEBUG: Apply discount form submitted")
             discount_form = DiscountForm(request.POST)
             
             if discount_form.is_valid():
@@ -1150,6 +1272,7 @@ def admin_dashboard(request):
                 messages.error(request, 'Please check the discount form and try again.')
         
         elif 'delete_notification' in request.POST:
+            print(f"🔧 DEBUG: Delete notification form submitted")
             notification_id = request.POST.get('notification_id')
             if notification_id:
                 try:
@@ -1166,8 +1289,8 @@ def admin_dashboard(request):
                 messages.error(request, '❌ No notification ID provided!')
         
         elif 'send_notification' in request.POST:
-            print("DEBUG: Send notification form submitted")
-            print(f"DEBUG: All POST data: {dict(request.POST)}")
+            print("🔧 DEBUG: Send notification form submitted")
+            print(f"🔧 DEBUG: All POST data: {dict(request.POST)}")
             
             # Get form data
             product_name = request.POST.get('product_name')
@@ -1177,7 +1300,7 @@ def admin_dashboard(request):
             notification_type = request.POST.get('notification_type', 'admin_message')
             priority = request.POST.get('notification_priority', 'medium')
             
-            print(f"DEBUG: Extracted data:")
+            print(f"🔧 DEBUG: Extracted data:")
             print(f"  - Product Name: '{product_name}'")
             print(f"  - Product Category: '{product_category}'")
             print(f"  - Title: '{title}'")
@@ -1190,7 +1313,7 @@ def admin_dashboard(request):
             missing_fields = [field for field in required_fields if not field or not field.strip()]
             
             if not missing_fields:
-                print("DEBUG: All required fields present, creating notification...")
+                print("🔧 DEBUG: All required fields present, creating notification...")
                 try:
                     # Try to find the product in database
                     product = None
@@ -1203,11 +1326,11 @@ def admin_dashboard(request):
                         if product:
                             current_stock = product.total_stock
                             trend_score = product.trend_score
-                            print(f"DEBUG: Found matching product: {product.name}")
+                            print(f"🔧 DEBUG: Found matching product: {product.name}")
                         else:
-                            print(f"DEBUG: No matching product found for: {product_name}")
+                            print(f"🔧 DEBUG: No matching product found for: {product_name}")
                     except Exception as e:
-                        print(f"DEBUG: Error finding product: {e}")
+                        print(f"🔧 DEBUG: Error finding product: {e}")
                     
                     # Get current time
                     current_time = timezone.now()
@@ -1228,7 +1351,7 @@ Notification Details:
 • Sent: {formatted_time}
 • From: Admin ({request.user.username})"""
                     
-                    print(f"DEBUG: Creating notification with:")
+                    print(f"🔧 DEBUG: Creating notification with:")
                     print(f"  - Title: '{title}'")
                     print(f"  - Target Role: 'inventory'")
                     print(f"  - Type: '{notification_type}'")
@@ -1246,7 +1369,7 @@ Notification Details:
                         is_read=False
                     )
                     
-                    print(f"DEBUG: Notification created successfully!")
+                    print(f"🔧 DEBUG: Notification created successfully!")
                     print(f"  - ID: {notification.id}")
                     print(f"  - Title: {notification.title}")
                     print(f"  - Target Role: {notification.target_user_role}")
@@ -1259,21 +1382,21 @@ Notification Details:
                         is_read=False,
                         id=notification.id
                     ).exists()
-                    print(f"DEBUG: Notification found in inventory query: {inventory_check}")
+                    print(f"🔧 DEBUG: Notification found in inventory query: {inventory_check}")
                     
                     success_message = f'✅ Detailed notification sent to inventory team!'
                     
                     messages.success(request, success_message)
-                    print(f"DEBUG: Success message added, redirecting...")
+                    print(f"🔧 DEBUG: Success message added, redirecting...")
                     return redirect('admin_dashboard')
                     
                 except Exception as e:
-                    print(f"DEBUG: Error creating notification: {e}")
+                    print(f"🔧 DEBUG: Error creating notification: {e}")
                     import traceback
                     traceback.print_exc()
                     messages.error(request, f'❌ Error sending notification: {str(e)}')
             else:
-                print(f"DEBUG: Missing required fields: {missing_fields}")
+                print(f"🔧 DEBUG: Missing required fields: {missing_fields}")
                 messages.error(request, '⚠️ Please fill in all required fields: Product Name, Category, Title, and Recommendation.')
     
     discount_form = DiscountForm()
@@ -1285,15 +1408,60 @@ Notification Details:
     orders = OrderQueue.objects.all().order_by('-created_at')
     
     # Count different order statuses
-    pending_orders_count = OrderQueue.objects.filter(status='pending').count()
+    # Pending orders should only include orders created by admin that are still pending
+    pending_orders_count = OrderQueue.objects.filter(
+        status='pending',
+        ordered_by__isnull=False  # Only count orders that were actually created by admin
+    ).count()
+    
     ordered_count = OrderQueue.objects.filter(status='ordered').count()
-    received_count = OrderQueue.objects.filter(status='received').count()
+    actual_received_count = OrderQueue.objects.filter(status='received').count()
+    
+    # Count admin completed orders (orders marked as seen by admin)
+    # This should be the main "completed" count since admin wants their actions to be counted
+    admin_seen_count = OrderQueue.objects.filter(message_received=True).count()
+    
+    # For completed orders, we'll use admin seen count as the primary metric
+    # since the user wants admin actions to be counted in completed orders
+    completed_orders_count = admin_seen_count
+    
+    print(f"🔧 DEBUG: Order counts:")
+    print(f"  - Pending (Admin Created): {pending_orders_count}")
+    print(f"  - Ordered: {ordered_count}")
+    print(f"  - Actually Received (Stock): {actual_received_count}")
+    print(f"  - Admin Seen (Admin Actions): {admin_seen_count}")
+    print(f"  - Completed Orders (Admin Actions): {completed_orders_count}")
     
     # Count conditions for dashboard stats
     overstock_count = sum(1 for item in stock_analysis if item['condition'] == 'Overstock')
     reorder_count = sum(1 for item in stock_analysis if item['condition'] == 'Reorder needed')
     near_expiry_count = sum(1 for item in stock_analysis if item['condition'] == 'Near expiry')
     expired_count = sum(1 for item in stock_analysis if item['condition'] == 'Expired')
+    
+    print(f"🔧 DEBUG: Context data prepared:")
+    print(f"  - Products: {len(products)}")
+    print(f"  - Orders: {len(orders)}")
+    print(f"  - Notifications: {len(sent_notifications)}")
+    print(f"  - Pending Orders: {pending_orders_count}")
+    
+    # Team Management Data
+    from datetime import datetime, timedelta
+    
+    # Get all inventory users
+    inventory_users_queryset = UserProfile.objects.filter(role='inventory').select_related('user')
+    
+    # Prepare simplified team data
+    team_data = []
+    active_inventory_users = inventory_users_queryset.count()  # Just count all inventory users as active
+    
+    for profile in inventory_users_queryset:
+        user = profile.user
+        team_data.append({
+            'user': user,
+        })
+    
+    # Sort by join date (newest first)
+    team_data.sort(key=lambda x: x['user'].date_joined, reverse=True)
     
     context = {
         'stock_analysis': stock_analysis,
@@ -1309,7 +1477,10 @@ Notification Details:
         'expired_count': expired_count,
         'pending_orders_count': pending_orders_count,
         'ordered_count': ordered_count,
-        'received_count': received_count,
+        'received_count': completed_orders_count,  # Use completed count for main display
+        'actual_received_count': actual_received_count,  # Actual received orders
+        'completed_orders_count': completed_orders_count,  # Total completed orders
+        'admin_seen_count': admin_seen_count,  # Admin seen count for breakdown
         'products': Product.objects.all(),  # Add products for notification form
         'products_json': json.dumps([{
             'name': product.name,
@@ -1317,16 +1488,235 @@ Notification Details:
             'stock': product.total_stock,
             'trendScore': float(product.trend_score)
         } for product in Product.objects.all()]),
+        'orders_json': json.dumps([{
+            'id': order.id,
+            'product': {
+                'name': order.product.name,
+                'stock': order.product.total_stock
+            },
+            'quantity': order.quantity,
+            'status': order.status,
+            'message_received': order.message_received,
+            'message_received_at': order.message_received_at.strftime('%B %d, %Y at %H:%M') if order.message_received_at else None,
+            'created_at': order.created_at.strftime('%B %d, %Y at %H:%M'),
+            'ordered_by': order.ordered_by.first_name or order.ordered_by.username if order.ordered_by else None,
+            'order_notes': order.order_notes or '',
+            'inventory_action': getattr(order, 'inventory_action', 'none'),
+            'inventory_action_by': getattr(order, 'inventory_action_by', None) and (order.inventory_action_by.first_name or order.inventory_action_by.username) if hasattr(order, 'inventory_action_by') else None,
+            'inventory_action_at': getattr(order, 'inventory_action_at', None) and order.inventory_action_at.strftime('%B %d, %Y at %H:%M') if hasattr(order, 'inventory_action_at') else None,
+            'admin_marked_received': getattr(order, 'admin_marked_received', False),
+            'admin_marked_received_at': getattr(order, 'admin_marked_received_at', None) and order.admin_marked_received_at.strftime('%B %d, %Y at %H:%M') if hasattr(order, 'admin_marked_received_at') else None
+        } for order in orders]),
+        
+        # Team Management Data
+        'inventory_users': team_data,
+        'active_inventory_users': active_inventory_users,
     }
     return render(request, 'admin_dashboard.html', context)
 
 @login_required
 def create_order(request):
+    print(f"🔧 DEBUG: create_order view accessed")
+    print(f"🔧 DEBUG: User: {request.user.username}")
+    print(f"🔧 DEBUG: Method: {request.method}")
+    print(f"🔧 DEBUG: POST data: {dict(request.POST)}")
+    
     if request.method == 'POST':
-        form = OrderForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Order created successfully!')
+        product_name = request.POST.get('product')
+        quantity = request.POST.get('quantity')
+        order_notes = request.POST.get('order_notes', '')
+        
+        print(f"🔧 DEBUG: Extracted data:")
+        print(f"  - Product: '{product_name}'")
+        print(f"  - Quantity: '{quantity}'")
+        print(f"  - Notes: '{order_notes}'")
+        
+        if product_name and quantity:
+            try:
+                product = Product.objects.get(name=product_name)
+                quantity = int(quantity)
+                
+                print(f"🔧 DEBUG: Found product: {product.name} (Stock: {product.total_stock})")
+                print(f"🔧 DEBUG: Quantity to order: {quantity}")
+                
+                # Create the order
+                order = OrderQueue.objects.create(
+                    product=product,
+                    quantity=quantity,
+                    ordered_by=request.user,
+                    order_notes=order_notes,
+                    message_sent=True  # We'll send notification immediately
+                )
+                
+                print(f"🔧 DEBUG: Order created: #{order.id}")
+                
+                # Create notification for inventory team
+                notification = Notification.objects.create(
+                    title=f"📦 NEW ORDER REQUEST: {product.name}",
+                    message=f"Admin has requested to order:\n\n"
+                           f"Product: {product.name}\n"
+                           f"Requested Quantity: {quantity} units\n"
+                           f"Current Stock: {product.total_stock} units\n"
+                           f"Order Notes: {order_notes if order_notes else 'No additional notes'}\n\n"
+                           f"📋 ACTION REQUIRED:\n"
+                           f"1. Click 'Receive Message' to acknowledge\n"
+                           f"2. Contact supplier to place order\n"
+                           f"3. Update order status when placed\n"
+                           f"4. Add received stock when delivered\n\n"
+                           f"Order ID: #{order.id}\n"
+                           f"Requested by: {request.user.first_name or request.user.username}\n"
+                           f"Request Time: {timezone.now().strftime('%B %d, %Y at %H:%M')}",
+                    notification_type='order_request',
+                    priority='urgent',
+                    target_user_role='inventory',
+                    product=product
+                )
+                
+                print(f"🔧 DEBUG: Notification created: #{notification.id}")
+                print(f"  - Title: {notification.title}")
+                print(f"  - Type: {notification.notification_type}")
+                print(f"  - Target: {notification.target_user_role}")
+                print(f"  - Priority: {notification.priority}")
+                
+                # Verify notification can be found by inventory query
+                inventory_check = Notification.objects.filter(
+                    target_user_role__in=['inventory', 'all'],
+                    is_read=False,
+                    notification_type='order_request'
+                ).count()
+                
+                print(f"🔧 DEBUG: Total order_request notifications for inventory: {inventory_check}")
+                
+                messages.success(request, f'✅ Order request created successfully! Inventory team has been notified about {quantity} units of {product.name}. (Order ID: #{order.id}, Notification ID: #{notification.id})')
+                
+            except Product.DoesNotExist:
+                print(f"🔧 DEBUG: Product not found: {product_name}")
+                messages.error(request, f'❌ Product "{product_name}" not found!')
+            except ValueError as e:
+                print(f"🔧 DEBUG: Invalid quantity: {quantity} - {e}")
+                messages.error(request, '❌ Invalid quantity value!')
+            except Exception as e:
+                print(f"🔧 DEBUG: Error creating order: {e}")
+                import traceback
+                traceback.print_exc()
+                messages.error(request, f'❌ Error creating order: {str(e)}')
+        else:
+            print(f"🔧 DEBUG: Missing required fields - Product: {product_name}, Quantity: {quantity}")
+            messages.error(request, '❌ Product name and quantity are required!')
+    
+    return redirect('admin_dashboard')
+
+@login_required
+def admin_mark_order_seen(request):
+    """Handle admin marking order as seen - this should mark order as received"""
+    print(f"🔧 DEBUG: admin_mark_order_seen view accessed")
+    print(f"🔧 DEBUG: User: {request.user.username}")
+    print(f"🔧 DEBUG: Method: {request.method}")
+    print(f"🔧 DEBUG: POST data: {dict(request.POST)}")
+    
+    if request.method == 'POST':
+        order_id = request.POST.get('order_id')
+        
+        print(f"🔧 DEBUG: Order ID: {order_id}")
+        
+        if order_id:
+            try:
+                order = OrderQueue.objects.get(id=order_id)
+                
+                print(f"🔧 DEBUG: Found order: {order.product.name} - Status: {order.status}")
+                
+                # Check if user is admin or the one who created the order
+                if not (request.user.userprofile.role == 'admin' or order.ordered_by == request.user):
+                    print(f"🔧 DEBUG: Permission denied - User role: {request.user.userprofile.role}")
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Permission denied. Only admin or order creator can mark as seen.'
+                        })
+                    else:
+                        messages.error(request, '❌ Permission denied!')
+                        return redirect('admin_dashboard')
+                
+                # Mark order as received by admin (final step)
+                old_status = order.status
+                order.status = 'received'  # Change status to received
+                
+                # Track admin action
+                if hasattr(order, 'admin_marked_received'):
+                    order.admin_marked_received = True
+                    order.admin_marked_received_at = timezone.now()
+                
+                order.save()
+                
+                print(f"🔧 DEBUG: Order marked as received by admin at: {timezone.now()}")
+                
+                # Create notification for inventory team
+                Notification.objects.create(
+                    title=f"✅ ORDER COMPLETED: {order.product.name}",
+                    message=f"Admin has marked the order as received and completed:\n\n"
+                           f"📋 ORDER DETAILS:\n"
+                           f"Product: {order.product.name}\n"
+                           f"Quantity: {order.quantity} units\n"
+                           f"Previous Status: {old_status.title()}\n"
+                           f"New Status: Received ✅\n\n"
+                           f"👤 COMPLETED BY:\n"
+                           f"Admin: {request.user.first_name or request.user.username}\n"
+                           f"Completion Time: {timezone.now().strftime('%B %d, %Y at %H:%M')}\n\n"
+                           f"📋 WORKFLOW SUMMARY:\n"
+                           f"1. ✅ Order created by admin\n"
+                           f"2. ✅ Inventory acknowledged request\n"
+                           f"3. ✅ Inventory placed order with supplier\n"
+                           f"4. ✅ Admin marked as received\n\n"
+                           f"Order ID: #{order.id}",
+                    notification_type='order_completed',
+                    priority='low',
+                    target_user_role='inventory',
+                    product=order.product
+                )
+                
+                print(f"🔧 DEBUG: Completion notification created for inventory team")
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    # Calculate updated counts for real-time update
+                    received_count = OrderQueue.objects.filter(status='received').count()
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': 'Order marked as received successfully!',
+                        'received_at': timezone.now().strftime('%B %d, %Y at %H:%M'),
+                        'updated_received_count': received_count
+                    })
+                else:
+                    messages.success(request, f'✅ Order for {order.product.name} marked as received!')
+                    
+            except OrderQueue.DoesNotExist:
+                print(f"🔧 DEBUG: Order not found with ID: {order_id}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Order not found'
+                    })
+                else:
+                    messages.error(request, '❌ Order not found!')
+            except Exception as e:
+                print(f"🔧 DEBUG: Error in admin_mark_order_seen: {e}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': str(e)
+                    })
+                else:
+                    messages.error(request, f'❌ Error: {str(e)}')
+        else:
+            print(f"🔧 DEBUG: No order ID provided")
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No order ID provided'
+                })
+            else:
+                messages.error(request, '❌ No order ID provided!')
+    
     return redirect('admin_dashboard')
 
 @login_required
@@ -1335,21 +1725,241 @@ def update_order_status(request, order_id):
     new_status = request.POST.get('status')
     
     if new_status in ['pending', 'ordered', 'received']:
+        old_status = order.status
         order.status = new_status
         order.save()
         
-        if new_status == 'received':
-            # Add stock when order is received
-            ExpiryStock.objects.create(
-                product=order.product,
-                quantity=order.quantity,
-                expiry_date=date.today() + timedelta(days=365)  # Default 1 year expiry
-            )
-            # Update stock notifications for the product
-            update_stock_notifications_for_product(order.product)
-            messages.success(request, f'Order received and stock updated for {order.product.name}!')
+        messages.success(request, f'Order status updated from {old_status} to {new_status}')
+    else:
+        messages.error(request, 'Invalid status')
     
     return redirect('admin_dashboard')
+
+@login_required
+def acknowledge_order_message(request):
+    """Handle inventory team acknowledging order messages"""
+    if request.method == 'POST':
+        notification_id = request.POST.get('order_id')  # This is actually notification ID
+        
+        if notification_id:
+            try:
+                # Find the notification first
+                notification = Notification.objects.get(
+                    id=notification_id,
+                    notification_type='order_request'
+                )
+                
+                # Extract order ID from notification message (we'll need to find the order by product and recent creation)
+                product = notification.product
+                
+                # Find the most recent pending order for this product
+                order = OrderQueue.objects.filter(
+                    product=product,
+                    message_sent=True,
+                    message_received=False
+                ).order_by('-created_at').first()
+                
+                if not order:
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Order not found or already acknowledged'
+                        })
+                    else:
+                        messages.error(request, '❌ Order not found or already acknowledged!')
+                        return redirect('inventory_dashboard')
+                
+                # Mark order as acknowledged by inventory
+                order.message_received = True
+                order.message_received_at = timezone.now()
+                
+                # Track inventory action
+                if hasattr(order, 'inventory_action'):
+                    order.inventory_action = 'acknowledged'
+                    order.inventory_action_by = request.user
+                    order.inventory_action_at = timezone.now()
+                
+                order.save()
+                
+                # Mark notification as read
+                notification.is_read = True
+                notification.save()
+                
+                # Create notification for admin about acknowledgment
+                if order.ordered_by:
+                    Notification.objects.create(
+                        title=f"📨 MESSAGE ACKNOWLEDGED: {order.product.name}",
+                        message=f"Inventory team has acknowledged your order request:\n\n"
+                               f"📋 ORDER DETAILS:\n"
+                               f"Product: {order.product.name}\n"
+                               f"Quantity Requested: {order.quantity} units\n"
+                               f"Current Stock: {order.product.total_stock} units\n"
+                               f"Order Notes: {order.order_notes if order.order_notes else 'No additional notes'}\n\n"
+                               f"👤 ACKNOWLEDGED BY:\n"
+                               f"Inventory Manager: {request.user.first_name or request.user.username}\n"
+                               f"Acknowledged Time: {timezone.now().strftime('%B %d, %Y at %H:%M')}\n\n"
+                               f"📦 NEXT STEPS:\n"
+                               f"1. Inventory will contact supplier\n"
+                               f"2. Order status will be updated when placed\n"
+                               f"3. Stock will be added when received\n\n"
+                               f"Order ID: #{order.id}\n"
+                               f"Status: Acknowledged ✅",
+                        notification_type='admin_message',
+                        priority='medium',
+                        target_user_role='admin',
+                        product=order.product
+                    )
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    # Calculate updated counts for real-time update
+                    # Use admin seen count as completed count
+                    updated_completed_count = OrderQueue.objects.filter(message_received=True).count()
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'Order message acknowledged for {order.product.name}',
+                        'updated_completed_count': updated_completed_count
+                    })
+                else:
+                    messages.success(request, f'✅ Order message acknowledged! Admin has been notified that you received the order request for {order.product.name}.')
+                    
+            except Notification.DoesNotExist:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Notification not found'
+                    })
+                else:
+                    messages.error(request, '❌ Notification not found!')
+            except Exception as e:
+                print(f"🔧 DEBUG: Error in acknowledge_order_message: {e}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': str(e)
+                    })
+                else:
+                    messages.error(request, f'❌ Error: {str(e)}')
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No notification ID provided'
+                })
+            else:
+                messages.error(request, '❌ No notification ID provided!')
+    
+    return redirect('inventory_dashboard')
+
+@login_required
+def update_order_from_notification(request):
+    """Handle order status update from notification"""
+    if request.method == 'POST':
+        notification_id = request.POST.get('notification_id')
+        status = request.POST.get('status')
+        
+        if notification_id and status:
+            try:
+                # Find the notification
+                notification = Notification.objects.get(
+                    id=notification_id,
+                    notification_type='order_request'
+                )
+                
+                # Find the order by product and recent creation
+                product = notification.product
+                order = OrderQueue.objects.filter(
+                    product=product,
+                    status='pending',
+                    message_received=True
+                ).order_by('-created_at').first()
+                
+                if not order:
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        return JsonResponse({
+                            'success': False,
+                            'error': 'Order not found or already updated'
+                        })
+                    else:
+                        messages.error(request, '❌ Order not found or already updated!')
+                        return redirect('inventory_dashboard')
+                
+                # Update order status
+                old_status = order.status
+                order.status = status
+                
+                # Track inventory action
+                if status == 'ordered' and hasattr(order, 'inventory_action'):
+                    order.inventory_action = 'ordered'
+                    order.inventory_action_by = request.user
+                    order.inventory_action_at = timezone.now()
+                
+                order.save()
+                
+                # Mark notification as read
+                notification.is_read = True
+                notification.save()
+                
+                # Notify admin when inventory places order with supplier
+                if status == 'ordered' and old_status != 'ordered' and order.ordered_by:
+                    Notification.objects.create(
+                        title=f"🚚 ORDER PLACED WITH SUPPLIER: {order.product.name}",
+                        message=f"Inventory team has placed your order with supplier:\n\n"
+                               f"📋 ORDER DETAILS:\n"
+                               f"Product: {order.product.name}\n"
+                               f"Quantity Ordered: {order.quantity} units\n"
+                               f"Current Stock: {order.product.total_stock} units\n"
+                               f"Order Notes: {order.order_notes if order.order_notes else 'No additional notes'}\n\n"
+                               f"👤 PROCESSED BY:\n"
+                               f"Inventory Manager: {request.user.first_name or request.user.username}\n"
+                               f"Processed Time: {timezone.now().strftime('%B %d, %Y at %H:%M')}\n\n"
+                               f"📦 NEXT STEPS:\n"
+                               f"1. Wait for supplier delivery\n"
+                               f"2. Add received stock when delivered\n"
+                               f"3. Mark order as received in admin panel\n\n"
+                               f"Order ID: #{order.id}\n"
+                               f"Status: Ordered with Supplier 🚚",
+                        notification_type='admin_message',
+                        priority='medium',
+                        target_user_role='admin',
+                        product=order.product
+                    )
+                
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'Order status updated to {status} for {order.product.name}'
+                    })
+                else:
+                    messages.success(request, f'✅ Order status updated to {status.title()} for {order.product.name}!')
+                    
+            except Notification.DoesNotExist:
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Notification not found'
+                    })
+                else:
+                    messages.error(request, '❌ Notification not found!')
+            except Exception as e:
+                print(f"🔧 DEBUG: Error in update_order_from_notification: {e}")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return JsonResponse({
+                        'success': False,
+                        'error': str(e)
+                    })
+                else:
+                    messages.error(request, f'❌ Error: {str(e)}')
+        else:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Missing notification ID or status'
+                })
+            else:
+                messages.error(request, '❌ Missing notification ID or status!')
+    
+    return redirect('inventory_dashboard')
 
 @login_required
 def billing(request):
@@ -1379,7 +1989,8 @@ def billing(request):
                 # Create bill
                 bill = SalesBill.objects.create(
                     bill_number=bill_number,
-                    total_amount=total_amount
+                    total_amount=total_amount,
+                    created_by=request.user  # Track who created the bill
                 )
                 
                 # Process each product
@@ -1492,7 +2103,8 @@ def billing(request):
                     
                     bill = SalesBill.objects.create(
                         bill_number=bill_number,
-                        total_amount=product.new_price * Decimal(str(quantity))
+                        total_amount=product.new_price * Decimal(str(quantity)),
+                        created_by=request.user  # Track who created the bill
                     )
                     
                     SalesBillItem.objects.create(
@@ -1531,21 +2143,33 @@ def billing(request):
     
     # Render the multi-product billing template
     sales_form = SalesForm()
-    recent_bills = SalesBill.objects.prefetch_related('items__product').order_by('-created_at')[:10]
+    
+    # Show only bills created by the current user
+    recent_bills = SalesBill.objects.filter(
+        created_by=request.user
+    ).prefetch_related('items__product').order_by('-created_at')[:10]
     
     from datetime import date
     from django.db.models import Sum
     
     today = date.today()
-    today_bills = SalesBill.objects.filter(created_at__date=today)
+    
+    # Filter today's bills by current user
+    today_bills = SalesBill.objects.filter(
+        created_at__date=today,
+        created_by=request.user
+    )
     today_sales_count = today_bills.count()
     today_sales_amount = today_bills.aggregate(total=Sum('total_amount'))['total'] or 0
     
     current_month = today.month
     current_year = today.year
+    
+    # Filter monthly bills by current user
     monthly_bills = SalesBill.objects.filter(
         created_at__year=current_year,
-        created_at__month=current_month
+        created_at__month=current_month,
+        created_by=request.user
     )
     monthly_sales_count = monthly_bills.count()
     monthly_sales_amount = monthly_bills.aggregate(total=Sum('total_amount'))['total'] or 0
@@ -1560,18 +2184,23 @@ def billing(request):
         'current_month_name': today.strftime('%B %Y'),
     }
     
-    # Use the new multi-product template
-    return render(request, 'billing_multi_product.html', context)
+    # Use the tabbed billing template
+    return render(request, 'billing.html', context)
 
 @login_required
 def get_bill_details(request, bill_id):
-    """AJAX endpoint to get bill details"""
+    """AJAX endpoint to get bill details - only for bills created by current user"""
     try:
-        bill = SalesBill.objects.prefetch_related('items__product').get(id=bill_id)
+        # Only allow users to view their own bills
+        bill = SalesBill.objects.prefetch_related('items__product').get(
+            id=bill_id,
+            created_by=request.user
+        )
         bill_data = {
             'bill_number': bill.bill_number,
             'created_at': bill.created_at.strftime('%b %d, %Y %H:%M'),
             'total_amount': str(bill.total_amount),
+            'created_by': bill.created_by.first_name or bill.created_by.username if bill.created_by else 'Unknown',
             'items': []
         }
         
@@ -1585,7 +2214,7 @@ def get_bill_details(request, bill_id):
         
         return JsonResponse(bill_data)
     except SalesBill.DoesNotExist:
-        return JsonResponse({'error': 'Bill not found'}, status=404)
+        return JsonResponse({'error': 'Bill not found or access denied'}, status=404)
 
 @login_required
 def get_product_details(request, product_id):
@@ -1922,6 +2551,32 @@ def dismiss_recommendation(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
+def home_view(request):
+    """
+    Home view that handles persistent login sessions.
+    If user is already logged in, redirect to their role-based dashboard.
+    If not logged in, redirect to signup page (create account first).
+    """
+    if request.user.is_authenticated:
+        try:
+            profile = request.user.userprofile
+            # User is already logged in, redirect to their dashboard
+            if profile.role == 'inventory':
+                return redirect('inventory_dashboard')
+            elif profile.role == 'marketing':
+                return redirect('trend_dashboard')
+            elif profile.role == 'admin':
+                return redirect('admin_dashboard')
+            else:
+                # Default fallback
+                return redirect('inventory_dashboard')
+        except UserProfile.DoesNotExist:
+            # User has no profile, redirect to inventory dashboard as default
+            return redirect('inventory_dashboard')
+    else:
+        # User is not logged in, redirect to signup page (create account first)
+        return redirect('signup')
+
 @login_required
 def test_eye_icon(request):
     """Test page for eye icon functionality"""
@@ -1931,3 +2586,305 @@ def test_eye_icon(request):
         content = f.read()
     
     return HttpResponse(content)
+
+@login_required
+def product_autocomplete_api(request):
+    """API endpoint for product autocomplete with category information"""
+    query = request.GET.get('q', '').strip()
+    
+    if not query:
+        return JsonResponse({'products': []})
+    
+    try:
+        # Search products by name (case-insensitive, partial match)
+        products = Product.objects.filter(
+            name__icontains=query
+        ).values('id', 'name', 'category')[:10]  # Limit to 10 results
+        
+        product_list = []
+        for product in products:
+            product_list.append({
+                'id': product['id'],
+                'name': product['name'],
+                'category': product['category']
+            })
+        
+        return JsonResponse({'products': product_list})
+        
+    except Exception as e:
+        print(f"🔧 DEBUG: Error in product autocomplete: {e}")
+        return JsonResponse({'products': [], 'error': str(e)})
+@login_required
+def delete_team_member(request):
+    """Handle admin deleting inventory team members - removes user from entire system"""
+    print(f"🔧 DEBUG: delete_team_member called - Method: {request.method}")
+    print(f"🔧 DEBUG: User: {request.user.username}")
+    print(f"🔧 DEBUG: POST data: {dict(request.POST)}")
+    
+    if request.method == 'POST':
+        # Check if user is admin
+        try:
+            if request.user.userprofile.role != 'admin':
+                print(f"🔧 DEBUG: Permission denied - user role: {request.user.userprofile.role}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Permission denied. Only admin can delete team members.'
+                })
+        except UserProfile.DoesNotExist:
+            print(f"🔧 DEBUG: User profile not found for user: {request.user.username}")
+            return JsonResponse({
+                'success': False,
+                'error': 'User profile not found.'
+            })
+        
+        user_id = request.POST.get('user_id')
+        print(f"🔧 DEBUG: Received user_id: {user_id}")
+        
+        if not user_id:
+            print(f"🔧 DEBUG: No user_id provided")
+            return JsonResponse({
+                'success': False,
+                'error': 'User ID not provided.'
+            })
+        
+        try:
+            # Get the user to delete
+            user_to_delete = User.objects.get(id=user_id)
+            print(f"🔧 DEBUG: Found user to delete: {user_to_delete.username}")
+            
+            # Check if user is inventory role
+            try:
+                profile = user_to_delete.userprofile
+                print(f"🔧 DEBUG: User role: {profile.role}")
+                if profile.role != 'inventory':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Can only delete inventory team members.'
+                    })
+            except UserProfile.DoesNotExist:
+                print(f"🔧 DEBUG: Profile not found for user to delete")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'User profile not found.'
+                })
+            
+            # Prevent admin from deleting themselves
+            if user_to_delete.id == request.user.id:
+                print(f"🔧 DEBUG: Admin trying to delete themselves")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Cannot delete your own account.'
+                })
+            
+            # Store username for response
+            deleted_username = user_to_delete.username
+            
+            print(f"🔧 DEBUG: Deleting user {deleted_username} (ID: {user_id})")
+            
+            # Clean up related data before deleting user
+            # 1. Update OrderQueue entries where this user was involved
+            orders_updated = OrderQueue.objects.filter(inventory_action_by=user_to_delete).update(
+                inventory_action_by=None,
+                inventory_action='none'
+            )
+            print(f"🔧 DEBUG: Updated {orders_updated} order queue entries")
+            
+            # 2. The user deletion will automatically cascade delete:
+            #    - UserProfile (due to CASCADE relationship)
+            #    - Any other related objects with CASCADE
+            
+            # Delete the user (this will cascade delete UserProfile and clean up references)
+            user_to_delete.delete()
+            
+            print(f"🔧 DEBUG: Successfully deleted user {deleted_username}")
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'Team member "{deleted_username}" has been successfully deleted from the entire system.',
+                'deleted_username': deleted_username
+            })
+            
+        except User.DoesNotExist:
+            print(f"🔧 DEBUG: User not found with ID: {user_id}")
+            return JsonResponse({
+                'success': False,
+                'error': 'User not found.'
+            })
+        except Exception as e:
+            print(f"🔧 DEBUG: Error deleting team member: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': f'An error occurred: {str(e)}'
+            })
+    
+    print(f"🔧 DEBUG: Invalid request method: {request.method}")
+    return JsonResponse({
+        'success': False,
+        'error': 'Invalid request method.'
+    })
+
+@login_required
+def get_user_profile(request):
+    """Get individual user's work profile and activity"""
+    if request.method == 'GET':
+        # Check if user is admin
+        try:
+            if request.user.userprofile.role != 'admin':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Permission denied. Only admin can view team member profiles.'
+                })
+        except UserProfile.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'User profile not found.'
+            })
+        
+        user_id = request.GET.get('user_id')
+        
+        if not user_id:
+            return JsonResponse({
+                'success': False,
+                'error': 'No user ID provided'
+            })
+        
+        try:
+            # Get the user
+            user = User.objects.get(id=user_id)
+            
+            # Security check: Only allow viewing inventory users
+            try:
+                profile = UserProfile.objects.get(user=user)
+                if profile.role != 'inventory':
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Can only view inventory team members'
+                    })
+            except UserProfile.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'User profile not found'
+                })
+            
+            # Get user's specific work data
+            
+            # 1. Orders acknowledged by this user
+            acknowledged_orders = OrderQueue.objects.filter(
+                inventory_action_by=user,
+                inventory_action='acknowledged'
+            ).select_related('product', 'ordered_by').order_by('-inventory_action_at')
+            
+            # 2. Orders placed by this user
+            placed_orders = OrderQueue.objects.filter(
+                inventory_action_by=user,
+                inventory_action='ordered'
+            ).select_related('product', 'ordered_by').order_by('-inventory_action_at')
+            
+            # 3. Notifications sent to inventory during this user's active period
+            user_notifications = Notification.objects.filter(
+                target_user_role__in=['inventory', 'all'],
+                created_at__gte=user.date_joined
+            ).order_by('-created_at')[:10]  # Last 10 notifications during their tenure
+            
+            # 4. Stock entries added during this user's active period
+            recent_stock_entries = ExpiryStock.objects.filter(
+                created_at__gte=user.date_joined
+            ).select_related('product').order_by('-created_at')[:10]
+            
+            # Prepare response data
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'first_name': user.first_name or user.username,
+                'last_name': user.last_name or '',
+                'email': user.email or 'No email provided',
+                'date_joined': user.date_joined.strftime('%B %d, %Y at %H:%M'),
+                'role': profile.get_role_display()
+            }
+            
+            # Acknowledged orders data
+            acknowledged_data = []
+            for order in acknowledged_orders:
+                acknowledged_data.append({
+                    'id': order.id,
+                    'product_name': order.product.name,
+                    'quantity': order.quantity,
+                    'status': order.get_status_display(),
+                    'acknowledged_at': order.inventory_action_at.strftime('%B %d, %Y at %H:%M') if order.inventory_action_at else 'N/A',
+                    'ordered_by': order.ordered_by.first_name or order.ordered_by.username if order.ordered_by else 'System',
+                    'notes': order.order_notes or 'No notes'
+                })
+            
+            # Placed orders data
+            placed_data = []
+            for order in placed_orders:
+                placed_data.append({
+                    'id': order.id,
+                    'product_name': order.product.name,
+                    'quantity': order.quantity,
+                    'status': order.get_status_display(),
+                    'placed_at': order.inventory_action_at.strftime('%B %d, %Y at %H:%M') if order.inventory_action_at else 'N/A',
+                    'ordered_by': order.ordered_by.first_name or order.ordered_by.username if order.ordered_by else 'System',
+                    'notes': order.order_notes or 'No notes'
+                })
+            
+            # Notifications data
+            notifications_data = []
+            for notification in user_notifications:
+                notifications_data.append({
+                    'id': notification.id,
+                    'title': notification.title,
+                    'type': notification.get_notification_type_display(),
+                    'priority': notification.get_priority_display(),
+                    'created_at': notification.created_at.strftime('%B %d, %Y at %H:%M'),
+                    'product_name': notification.product.name if notification.product else 'General'
+                })
+            
+            # Stock entries data
+            stock_data = []
+            for stock in recent_stock_entries:
+                stock_data.append({
+                    'id': stock.id,
+                    'product_name': stock.product.name,
+                    'quantity': stock.quantity,
+                    'expiry_date': stock.expiry_date.strftime('%B %d, %Y'),
+                    'added_at': stock.created_at.strftime('%B %d, %Y at %H:%M')
+                })
+            
+            # Calculate statistics
+            stats = {
+                'total_acknowledged': acknowledged_orders.count(),
+                'total_placed': placed_orders.count(),
+                'total_notifications': user_notifications.count(),
+                'total_stock_entries': recent_stock_entries.count(),
+                'active_days': (timezone.now().date() - user.date_joined.date()).days
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'user': user_data,
+                'acknowledged_orders': acknowledged_data,
+                'placed_orders': placed_data,
+                'notifications': notifications_data,
+                'stock_entries': stock_data,
+                'stats': stats
+            })
+            
+        except User.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'User not found'
+            })
+        except Exception as e:
+            print(f"🔧 DEBUG: Error fetching user profile: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Error fetching user profile: {str(e)}'
+            })
+    
+    return JsonResponse({
+        'success': False,
+        'error': 'Invalid request method'
+    })

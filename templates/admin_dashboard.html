@@ -1,10 +1,14 @@
 {% extends 'base.html' %}
 {% load tz %}
 
-{% block title %}Admin Dashboard - NeuroStock AI{% endblock %}
+{% block title %}Admin Dashboard - NeuroStock{% endblock %}
+
 {% block nav %}
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
+<!-- CSRF Token for AJAX requests -->
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
             <a class="navbar-brand" href="#">
                 <i class="fas fa-brain me-2"></i>NeuroStock
             </a>
@@ -13,48 +17,79 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
-                            <i class="fas fa-warehouse"></i> Inventory
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'trend_dashboard' %}">
-                            <i class="fas fa-chart-line"></i> Trends
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                            <i class="fas fa-cog"></i> Admin
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'billing' %}">
-                            <i class="fas fa-receipt"></i> Billing
-                        </a>
-                    </li>
+                    {% if user.userprofile.role == 'inventory' %}
+                        <!-- Inventory users: Inventory + Billing -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'admin' %}
+                        <!-- Admin users: Inventory + Trends + Billing + Admin -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'marketing' %}
+                        <!-- Marketing users: Only Trends -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                    {% else %}
+                        <!-- Fallback: Show admin options -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav">
-                    <!-- Admin Notification Tracking -->
-                    {% if unread_notifications > 0 %}
-                    <li class="nav-item me-3">
-                        <a class="nav-link position-relative" href="#notificationTracking" title="Unread notifications sent">
-                            <i class="fas fa-paper-plane fs-5"></i>
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark">
-                                {{ unread_notifications }}
-                                <span class="visually-hidden">unread sent notifications</span>
-                            </span>
-                        </a>
-                    </li>
-                    {% endif %}
-                    
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-user"></i> {{ user.username }}
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{% url 'logout' %}">
-                                <i class="fas fa-sign-out-alt"></i> Logout
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
                             </a></li>
                         </ul>
                     </li>
@@ -65,460 +100,723 @@
 {% endblock %}
 
 {% block content %}
+<!-- Header with Quick Stats -->
 <div class="row mb-4">
     <div class="col-12">
-        <div>
-            <h2><i class="fas fa-cog"></i> Administration</h2>
-            <p class="text-muted">Stock intelligence, pricing decisions, and order management</p>
-        </div>
-    </div>
-</div>
-
-<!-- Stock Intelligence Analysis -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header bg-primary text-white">
-                <h5><i class="fas fa-brain"></i> Stock Intelligence Analysis</h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">Admin Dashboard</h2>
+                <p class="text-muted mb-0">Manage inventory, orders, and system operations</p>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Total Stock</th>
-                                <th>ABC Class</th>
-                                <th>Trend Score</th>
-                                <th>Days to Expiry</th>
-                                <th>Condition</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for item in stock_analysis %}
-                            <tr>
-                                <td><strong>{{ item.product.name }}</strong></td>
-                                <td>{{ item.total_stock }}</td>
-                                <td>
-                                    <span class="badge bg-{% if item.product.calculated_abc_classification == 'A' %}danger{% elif item.product.calculated_abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
-                                        {{ item.product.calculated_abc_classification }}
-                                    </span>
-                                </td>
-                                <td>{{ item.product.trend_score|floatformat:1 }}/10</td>
-                                <td>
-                                    {% if item.days_to_expiry %}
-                                        {{ item.days_to_expiry }} days
-                                    {% else %}
-                                        N/A
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <span class="badge condition-{{ item.condition|lower|cut:' ' }}">
-                                        {{ item.condition }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if item.condition == "Reorder needed" %}
-                                        <form method="post" action="{% url 'create_order' %}" class="d-inline">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="product" value="{{ item.product.name }}">
-                                            <input type="hidden" name="quantity" value="100">
-                                            <button type="submit" class="btn btn-sm btn-warning">
-                                                <i class="fas fa-shopping-cart"></i> Order
-                                            </button>
-                                        </form>
-                                    {% elif item.condition == "Overstock" %}
-                                        <button class="btn btn-sm btn-info" 
-                                                data-product-id="{{ item.product.id }}" 
-                                                data-product-name="{{ item.product.name }}"
-                                                onclick="setDiscountProduct(this.getAttribute('data-product-id'), this.getAttribute('data-product-name'))">
-                                            <i class="fas fa-percentage"></i> Discount
-                                        </button>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted">No products to analyze</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <div class="d-flex gap-3">
+                <div class="text-center">
+                    <div class="badge bg-primary fs-6">{{ products|length }}</div>
+                    <small class="text-muted d-block">Total Products</small>
+                </div>
+                <div class="text-center">
+                    <div class="badge bg-success fs-6">{{ ordered_count }}</div>
+                    <small class="text-muted d-block">Orders Placed</small>
+                </div>
+                <div class="text-center">
+                    <div class="badge bg-warning fs-6">{{ pending_orders_count }}</div>
+                    <small class="text-muted d-block">Pending Orders</small>
+                </div>
+                <div class="text-center">
+                    <div class="badge bg-info fs-6">{{ completed_orders_count }}</div>
+                    <small class="text-muted d-block">Completed Orders</small>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Pricing Decision -->
-<div class="row mb-4">
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-warning text-dark">
-                <h5><i class="fas fa-tags"></i> Apply Discount</h5>
+<!-- Main Dashboard Tabs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <ul class="nav nav-tabs card-header-tabs" id="adminTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="stock-intelligence-tab" data-bs-toggle="tab" data-bs-target="#stock-intelligence-panel" type="button" role="tab">
+                            <i class="fas fa-chart-line me-2"></i>Stock Intelligence
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="actions-orders-tab" data-bs-toggle="tab" data-bs-target="#actions-orders-panel" type="button" role="tab">
+                            <i class="fas fa-cogs me-2"></i>Actions & Orders
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications-panel" type="button" role="tab">
+                            <i class="fas fa-bell me-2"></i>Notifications
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="team-management-tab" data-bs-toggle="tab" data-bs-target="#team-management-panel" type="button" role="tab">
+                            <i class="fas fa-users me-2"></i>Team Management
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="statistics-tab" data-bs-toggle="tab" data-bs-target="#statistics-panel" type="button" role="tab">
+                            <i class="fas fa-chart-bar me-2"></i>Statistics
+                        </button>
+                    </li>
+                </ul>
             </div>
             <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
+                <div class="tab-content" id="adminTabContent">
                     
-                    <!-- Display form errors -->
-                    {% if discount_form.errors %}
-                        <div class="alert alert-danger">
-                            <h6><i class="fas fa-exclamation-triangle"></i> Form Errors:</h6>
-                            {% for field, errors in discount_form.errors.items %}
-                                <div><strong>{{ field|title }}:</strong>
-                                    {% for error in errors %}
-                                        <div>• {{ error }}</div>
+                    <!-- Stock Intelligence Panel -->
+                    <div class="tab-pane fade show active" id="stock-intelligence-panel" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-box me-1"></i>Product</th>
+                                        <th><i class="fas fa-layer-group me-1"></i>Stock Level</th>
+                                        <th><i class="fas fa-tag me-1"></i>ABC Class</th>
+                                        <th><i class="fas fa-chart-line me-1"></i>Trend Score</th>
+                                        <th><i class="fas fa-calendar-alt me-1"></i>Expiry Status</th>
+                                        <th><i class="fas fa-exclamation-triangle me-1"></i>Condition</th>
+                                        <th><i class="fas fa-cog me-1"></i>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in stock_analysis %}
+                                    <tr>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="product-avatar me-2">
+                                                    <i class="fas fa-cube text-primary"></i>
+                                                </div>
+                                                <div>
+                                                    <strong>{{ item.product.name }}</strong>
+                                                    <br><small class="text-muted">{{ item.product.category }}</small>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if item.product.total_stock < 50 %}bg-danger{% elif item.product.total_stock < 100 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                                {{ item.product.total_stock }} units
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if item.product.calculated_abc_classification == 'A' %}bg-danger{% elif item.product.calculated_abc_classification == 'B' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                                {{ item.product.calculated_abc_classification }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <div class="progress me-2" style="width: 60px; height: 8px;">
+                                                    <div class="progress-bar {% if item.product.trend_score >= 7 %}bg-success{% elif item.product.trend_score >= 4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                         data-trend-score="{{ item.product.trend_score|floatformat:0 }}"></div>
+                                                </div>
+                                                <span class="small">{{ item.product.trend_score|floatformat:1 }}/10</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if item.days_to_expiry %}
+                                                <span class="badge {% if item.days_to_expiry <= 7 %}bg-danger{% elif item.days_to_expiry <= 30 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                                    {{ item.days_to_expiry }} days
+                                                </span>
+                                            {% else %}
+                                                <span class="text-muted">No expiry data</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if item.condition == 'Critical' %}
+                                                <span class="badge bg-danger">Critical</span>
+                                            {% elif item.condition == 'Warning' %}
+                                                <span class="badge bg-warning text-dark">Warning</span>
+                                            {% elif item.condition == 'Good' %}
+                                                <span class="badge bg-success">Good</span>
+                                            {% elif item.condition == 'Reorder needed' %}
+                                                <span class="badge bg-warning text-dark">Reorder needed</span>
+                                            {% elif item.condition == 'Near expiry' %}
+                                                <span class="badge bg-danger">Near expiry</span>
+                                            {% elif item.condition == 'Expired' %}
+                                                <span class="badge bg-dark text-white">Expired</span>
+                                            {% elif item.condition == 'Overstock' %}
+                                                <span class="badge bg-info">Overstock</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">{{ item.condition }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-sm btn-outline-warning" 
+                                                        data-product-id="{{ item.product.id }}"
+                                                        data-product-name="{{ item.product.name }}"
+                                                        onclick="setDiscountProduct(this.dataset.productId, this.dataset.productName)"
+                                                        title="Apply Discount">
+                                                    <i class="fas fa-percentage"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-primary" 
+                                                        data-product-name="{{ item.product.name }}"
+                                                        data-product-id="{{ item.product.id }}"
+                                                        data-current-stock="{{ item.product.total_stock }}"
+                                                        onclick="populateOrderModal(this.dataset.productName, this.dataset.productId, this.dataset.currentStock)"
+                                                        title="Create Order">
+                                                    <i class="fas fa-shopping-cart"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                            <br>All products are in good condition
+                                        </td>
+                                    </tr>
                                     {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Actions & Orders Panel -->
+                    <div class="tab-pane fade" id="actions-orders-panel" role="tabpanel">
+                        
+                        <!-- Apply Product Discount Section -->
+                        <div class="mb-5">
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <h5 class="text-primary fw-bold mb-0">
+                                        <i class="fas fa-percentage me-2"></i>Product Discount Management
+                                    </h5>
+                                    <p class="text-muted small mb-0">Apply special pricing and discounts to products</p>
                                 </div>
-                            {% endfor %}
-                        </div>
-                    {% endif %}
-                    
-                    <div class="mb-3">
-                        {{ discount_form.product.label_tag }}
-                        {{ discount_form.product }}
-                        {% if discount_form.product.errors %}
-                            <div class="text-danger small">{{ discount_form.product.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="mb-3">
-                        {{ discount_form.discount_percentage.label_tag }}
-                        <div class="input-group">
-                            {{ discount_form.discount_percentage }}
-                            <span class="input-group-text">%</span>
-                        </div>
-                        {% if discount_form.discount_percentage.errors %}
-                            <div class="text-danger small">{{ discount_form.discount_percentage.errors.0 }}</div>
-                        {% endif %}
-                    </div>
-                    <button type="submit" name="apply_discount" class="btn btn-warning">
-                        <i class="fas fa-percentage"></i> Apply Discount
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Send Notification Form -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-success text-white">
-                <h5><i class="fas fa-bell"></i> Send Notification to Inventory Team</h5>
-            </div>
-            <div class="card-body">
-                <form method="post" id="notificationForm">
-                    {% csrf_token %}
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="product_name" class="form-label">
-                                <i class="fas fa-box me-1"></i>Product Name
-                            </label>
-                            <input type="text" class="form-control product-autocomplete" id="product_name" name="product_name" 
-                                   placeholder="Type product name..." required onchange="updateProductInfo()" autocomplete="off">
-                            <div class="form-text">Enter the exact product name</div>
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="product_category" class="form-label">
-                                <i class="fas fa-tags me-1"></i>Product Category
-                            </label>
-                            <input type="text" class="form-control" id="product_category" name="product_category" 
-                                   placeholder="Enter category" required>
-                            <div class="form-text">e.g., Electronics, Food, Clothing</div>
-                        </div>
-                    </div>
-                    
-                    <!-- Auto-populated product info -->
-                    <div class="row" id="productInfoSection" style="display: none;">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">
-                                <i class="fas fa-warehouse me-1"></i>Current Stock
-                            </label>
-                            <div class="form-control-plaintext bg-light p-2 rounded">
-                                <span id="currentStock" class="fw-bold text-primary">--</span> units
+                            </div>
+                            <div class="row justify-content-center">
+                                <div class="col-lg-6 col-xl-5">
+                                    <div class="card shadow-sm border-0 discount-card">
+                                        <div class="card-header bg-gradient-warning text-dark border-0 position-relative">
+                                            <div class="d-flex align-items-center">
+                                                <div class="icon-wrapper me-3">
+                                                    <i class="fas fa-percentage fa-lg"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">Apply Product Discount</h6>
+                                                    <small class="opacity-75">Set special pricing for products</small>
+                                                </div>
+                                            </div>
+                                            <div class="position-absolute top-0 end-0 p-2">
+                                                <i class="fas fa-tags opacity-25 fa-2x"></i>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <form method="post" class="discount-form">
+                                                {% csrf_token %}
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-semibold">
+                                                        <i class="fas fa-box me-1 text-warning"></i>Select Product
+                                                    </label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light border-end-0">
+                                                            <i class="fas fa-search text-muted"></i>
+                                                        </span>
+                                                        {{ discount_form.product }}
+                                                    </div>
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label for="{{ discount_form.discount_percentage.id_for_label }}" class="form-label fw-semibold">
+                                                        <i class="fas fa-percent me-1 text-warning"></i>Discount Percentage
+                                                    </label>
+                                                    <div class="input-group">
+                                                        <span class="input-group-text bg-light">
+                                                            <i class="fas fa-minus text-success"></i>
+                                                        </span>
+                                                        {{ discount_form.discount_percentage }}
+                                                        <span class="input-group-text bg-warning text-dark fw-bold">%</span>
+                                                    </div>
+                                                    <div class="form-text">
+                                                        <i class="fas fa-info-circle me-1"></i>Enter discount percentage (0-100)
+                                                    </div>
+                                                </div>
+                                                <div class="d-grid">
+                                                    <button type="submit" name="apply_discount" class="btn btn-warning btn-lg fw-semibold shadow-sm">
+                                                        <i class="fas fa-magic me-2"></i>Apply Discount
+                                                        <i class="fas fa-arrow-right ms-2"></i>
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">
-                                <i class="fas fa-chart-line me-1"></i>Current Trend Score
-                            </label>
-                            <div class="form-control-plaintext bg-light p-2 rounded">
-                                <span id="trendScore" class="fw-bold text-success">--</span>/10
+
+                        <!-- Send Notification Section -->
+                        <div class="mb-5">
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <h5 class="text-primary fw-bold mb-0">
+                                        <i class="fas fa-bell me-2"></i>Team Communication
+                                    </h5>
+                                    <p class="text-muted small mb-0">Send notifications and alerts to inventory team</p>
+                                </div>
+                            </div>
+                            <div class="row justify-content-center">
+                                <div class="col-lg-8 col-xl-7">
+                                    <div class="card shadow-sm border-0 notification-card">
+                                        <div class="card-header bg-gradient-primary text-white border-0 position-relative">
+                                            <div class="d-flex align-items-center">
+                                                <div class="icon-wrapper me-3">
+                                                    <i class="fas fa-bell fa-lg"></i>
+                                                </div>
+                                                <div>
+                                                    <h6 class="mb-0 fw-bold">Send Notification</h6>
+                                                    <small class="opacity-75">Alert inventory team instantly</small>
+                                                </div>
+                                            </div>
+                                            <div class="position-absolute top-0 end-0 p-2">
+                                                <i class="fas fa-paper-plane opacity-25 fa-2x"></i>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <form method="post" class="notification-form">
+                                                {% csrf_token %}
+                                                <div class="row">
+                                                    <div class="col-6 mb-3">
+                                                        <label for="product_name" class="form-label fw-semibold">
+                                                            <i class="fas fa-cube me-1 text-primary"></i>Product
+                                                        </label>
+                                                        <div class="position-relative">
+                                                            <input type="text" class="form-control" id="product_name" name="product_name" 
+                                                                   placeholder="Type product name..." required autocomplete="off">
+                                                            <div id="product_suggestions" class="dropdown-menu w-100" style="display: none; max-height: 200px; overflow-y: auto;"></div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-6 mb-3">
+                                                        <label for="product_category" class="form-label fw-semibold">
+                                                            <i class="fas fa-folder me-1 text-primary"></i>Category
+                                                        </label>
+                                                        <input type="text" class="form-control" id="product_category" name="product_category" 
+                                                               placeholder="Auto-filled from product" required readonly>
+                                                    </div>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="notification_title" class="form-label fw-semibold">
+                                                        <i class="fas fa-heading me-1 text-primary"></i>Notification Title
+                                                    </label>
+                                                    <input type="text" class="form-control" id="notification_title" name="notification_title" 
+                                                           placeholder="Enter notification title" required>
+                                                </div>
+                                                <div class="mb-3">
+                                                    <label for="admin_recommendation" class="form-label fw-semibold">
+                                                        <i class="fas fa-comment-alt me-1 text-primary"></i>Message
+                                                    </label>
+                                                    <textarea class="form-control" id="admin_recommendation" name="admin_recommendation" 
+                                                              rows="3" placeholder="Type your message here..." required></textarea>
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label for="notification_priority" class="form-label fw-semibold">
+                                                        <i class="fas fa-exclamation-triangle me-1 text-primary"></i>Priority Level
+                                                    </label>
+                                                    <select class="form-select" id="notification_priority" name="notification_priority">
+                                                        <option value="low">🟢 Low Priority</option>
+                                                        <option value="medium" selected>🟡 Medium Priority</option>
+                                                        <option value="high">🟠 High Priority</option>
+                                                        <option value="urgent">🔴 Urgent Priority</option>
+                                                    </select>
+                                                </div>
+                                                <div class="d-grid">
+                                                    <button type="submit" name="send_notification" class="btn btn-primary btn-lg fw-semibold shadow-sm">
+                                                        <i class="fas fa-rocket me-2"></i>Send Notification
+                                                        <i class="fas fa-paper-plane ms-2"></i>
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Order Queue Section -->
+                        <div class="mb-4">
+                            <div class="row">
+                                <div class="col-12 mb-3">
+                                    <h5 class="text-primary fw-bold mb-0">
+                                        <i class="fas fa-list-check me-2"></i>Order Management
+                                    </h5>
+                                    <p class="text-muted small mb-0">Track and manage order progress and workflow</p>
+                                </div>
+                            </div>
+                            <div class="row justify-content-center">
+                                <div class="col-lg-10 col-xl-8">
+                                    <div class="card shadow-sm border-0 order-queue-card">
+                                        <div class="card-header bg-gradient-info text-white border-0 position-relative">
+                                            <div class="d-flex align-items-center justify-content-between">
+                                                <div class="d-flex align-items-center">
+                                                    <div class="icon-wrapper me-3">
+                                                        <i class="fas fa-list-check fa-lg"></i>
+                                                    </div>
+                                                    <div>
+                                                        <h6 class="mb-0 fw-bold">Order Queue</h6>
+                                                        <small class="opacity-75">Track order progress</small>
+                                                    </div>
+                                                </div>
+                                                <div class="badge bg-white text-info fw-bold">
+                                                    {{ orders|length }}
+                                                </div>
+                                            </div>
+                                            <div class="position-absolute top-0 end-0 p-2">
+                                                <i class="fas fa-clipboard-list opacity-25 fa-2x"></i>
+                                            </div>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            {% if orders %}
+                                                <div class="order-queue-container" style="max-height: 500px; overflow-y: auto;">
+                                                    {% for order in orders %}
+                                                    <div class="order-item border-bottom p-3 {% if forloop.last %}border-0{% endif %}">
+                                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                                            <div class="flex-grow-1">
+                                                                <h6 class="mb-1 fw-semibold text-dark">{{ order.product.name }}</h6>
+                                                                {% if order.order_notes %}
+                                                                    <p class="mb-1 text-muted small">
+                                                                        <i class="fas fa-sticky-note me-1"></i>{{ order.order_notes|truncatewords:8 }}
+                                                                    </p>
+                                                                {% endif %}
+                                                                <div class="d-flex align-items-center gap-2 mb-2">
+                                                                    <span class="badge bg-light text-dark">
+                                                                        <i class="fas fa-boxes me-1"></i>{{ order.quantity }} units
+                                                                    </span>
+                                                                    {% if order.status == 'pending' %}
+                                                                        {% if order.message_received %}
+                                                                            <span class="badge bg-success">
+                                                                                <i class="fas fa-check me-1"></i>Acknowledged
+                                                                            </span>
+                                                                        {% else %}
+                                                                            <span class="badge bg-warning text-dark">
+                                                                                <i class="fas fa-clock me-1"></i>Pending
+                                                                            </span>
+                                                                        {% endif %}
+                                                                    {% elif order.status == 'ordered' %}
+                                                                        <span class="badge bg-info">
+                                                                            <i class="fas fa-truck me-1"></i>Ordered
+                                                                        </span>
+                                                                    {% elif order.status == 'received' %}
+                                                                        <span class="badge bg-success">
+                                                                            <i class="fas fa-check-circle me-1"></i>Received
+                                                                        </span>
+                                                                    {% endif %}
+                                                                </div>
+                                                                
+                                                                <!-- Inventory Action Display -->
+                                                                {% if order.inventory_action|default:'none' != 'none' %}
+                                                                    <div class="inventory-action-info mt-2 p-2 bg-light rounded">
+                                                                        <small class="text-primary fw-semibold">
+                                                                            <i class="fas fa-user-check me-1"></i>Inventory Action:
+                                                                        </small>
+                                                                        <br>
+                                                                        <small class="text-muted">
+                                                                            {% if order.inventory_action|default:'none' == 'acknowledged' %}
+                                                                                <i class="fas fa-handshake text-success me-1"></i>Acknowledged by {{ order.inventory_action_by.first_name|default:order.inventory_action_by.username|default:'Unknown' }}
+                                                                            {% elif order.inventory_action|default:'none' == 'ordered' %}
+                                                                                <i class="fas fa-truck text-info me-1"></i>Ordered with supplier by {{ order.inventory_action_by.first_name|default:order.inventory_action_by.username|default:'Unknown' }}
+                                                                            {% endif %}
+                                                                            {% if order.inventory_action_at %}
+                                                                                <br><i class="fas fa-clock me-1"></i>{{ order.inventory_action_at|date:"M d, H:i" }}
+                                                                            {% endif %}
+                                                                        </small>
+                                                                    </div>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex justify-content-between align-items-center">
+                                                            <small class="text-muted">
+                                                                <i class="fas fa-calendar me-1"></i>{{ order.created_at|date:"M d, H:i" }}
+                                                            </small>
+                                                            {% if order.status == 'received' %}
+                                                                <button class="btn btn-sm btn-success" disabled title="✅ Completed">
+                                                                    <i class="fas fa-check-double me-1"></i>Completed
+                                                                </button>
+                                                            {% elif order.inventory_action|default:'none' == 'ordered' %}
+                                                                <button class="btn btn-sm btn-primary admin-mark-seen-btn" 
+                                                                        data-order-id="{{ order.id }}"
+                                                                        title="Mark as received">
+                                                                    <i class="fas fa-check-circle me-1"></i>Mark Received
+                                                                </button>
+                                                            {% elif order.message_received %}
+                                                                <button class="btn btn-sm btn-outline-secondary" disabled title="Waiting for inventory to place order">
+                                                                    <i class="fas fa-hourglass-half me-1"></i>Waiting
+                                                                </button>
+                                                            {% else %}
+                                                                <button class="btn btn-sm btn-outline-warning" disabled title="Waiting for inventory acknowledgment">
+                                                                    <i class="fas fa-clock me-1"></i>Pending
+                                                                </button>
+                                                            {% endif %}
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                </div>
+                                            {% else %}
+                                                <div class="text-center py-5">
+                                                    <div class="mb-3">
+                                                        <i class="fas fa-clipboard-list fa-3x text-muted opacity-50"></i>
+                                                    </div>
+                                                    <h6 class="text-muted">No Orders in Queue</h6>
+                                                    <p class="text-muted small mb-0">Orders will appear here when created</p>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="notification_title" class="form-label">
-                            <i class="fas fa-heading me-1"></i>Notification Title
-                        </label>
-                        <input type="text" class="form-control" id="notification_title" name="notification_title" 
-                               placeholder="e.g., Stock Alert for [Product Name]" required>
-                        <div class="form-text">Brief title for the notification</div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="admin_recommendation" class="form-label">
-                            <i class="fas fa-lightbulb me-1"></i>Admin Recommendation
-                        </label>
-                        <textarea class="form-control" id="admin_recommendation" name="admin_recommendation" 
-                                  rows="3" placeholder="Enter your recommendation for this product..." required></textarea>
-                        <div class="form-text">Your specific recommendation or instruction</div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="notification_type" class="form-label">
-                                <i class="fas fa-tag me-1"></i>Notification Type
-                            </label>
-                            <select class="form-select" id="notification_type" name="notification_type">
-                                <option value="admin_message" selected>📋 Admin Message</option>
-                                <option value="stock_alert">📦 Stock Alert</option>
-                                <option value="price_update">💰 Price Update</option>
-                                <option value="reorder_request">🔄 Reorder Request</option>
-                                <option value="urgent_action">🚨 Urgent Action</option>
-                            </select>
-                        </div>
-                        
-                        <div class="col-md-6 mb-3">
-                            <label for="notification_priority" class="form-label">
-                                <i class="fas fa-exclamation-triangle me-1"></i>Priority Level
-                            </label>
-                            <select class="form-select" id="notification_priority" name="notification_priority">
-                                <option value="low">🟢 Low Priority</option>
-                                <option value="medium" selected>🟡 Medium Priority</option>
-                                <option value="high">🟠 High Priority</option>
-                                <option value="urgent">🔴 Urgent Priority</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <!-- Current time display -->
-                    <div class="mb-3">
-                        <label class="form-label">
-                            <i class="fas fa-clock me-1"></i>Notification Time
-                        </label>
-                        <div class="form-control-plaintext bg-light p-2 rounded">
-                            <span id="currentTime" class="fw-bold text-info">Loading...</span>
-                        </div>
-                        <div class="form-text">This notification will be sent with current timestamp</div>
-                    </div>
-                    
-                    <!-- <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Preview:</strong> This notification will be sent to the Inventory Team with:
-                        <ul class="mb-0 mt-2">
-                            <li>Product details (name, category, current stock, trend score)</li>
-                            <li>Your recommendation</li>
-                            <li>Current timestamp</li>
-                            <li>Selected priority level</li>
-                        </ul>
-                    </div> -->
-                    
-                    <div class="d-flex justify-content-end">
-                        <button type="submit" name="send_notification" class="btn btn-success">
-                            <i class="fas fa-paper-plane me-1"></i>Send to Inventory Team
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
 
-    <!-- Order Queue Management -->
-    <div class="col-lg-6">
-        <div class="card">
-            <div class="card-header bg-info text-white">
-                <h5><i class="fas fa-list-alt"></i> Order Queue</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Qty</th>
-                                <th>Status</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for order in orders %}
-                            <tr>
-                                <td>{{ order.product.name }}</td>
-                                <td>{{ order.quantity }}</td>
-                                <td>
-                                    <span class="badge status-badge bg-{% if order.status == 'pending' %}warning{% elif order.status == 'ordered' %}info{% else %}success{% endif %}">
-                                        {{ order.status|title }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if order.status != 'received' %}
-                                    <form method="post" action="{% url 'update_order_status' order.id %}" class="d-inline">
-                                        {% csrf_token %}
-                                        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                                            <option value="pending" {% if order.status == 'pending' %}selected{% endif %}>Pending</option>
-                                            <option value="ordered" {% if order.status == 'ordered' %}selected{% endif %}>Ordered</option>
-                                            <option value="received" {% if order.status == 'received' %}selected{% endif %}>Received</option>
-                                        </select>
-                                    </form>
-                                    {% else %}
-                                    <span class="text-success"><i class="fas fa-check"></i> Complete</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No orders in queue</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Notification Tracking Section -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card shadow-lg border-0">
-            <div class="card-header bg-gradient-info text-white border-0">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h5 class="mb-0 fw-bold">
-                            <i class="fas fa-paper-plane me-2"></i>
-                            Sent Notifications Tracking
-                        </h5>
-                        <small class="opacity-75">
-                            <i class="fas fa-eye me-1"></i>
-                            Monitor notification delivery and read status
-                        </small>
-                    </div>
-                    <div class="d-flex align-items-center">
-                        <div class="notification-stats me-3">
-                            <span class="badge bg-light text-dark me-2">
-                                <i class="fas fa-paper-plane me-1"></i>{{ total_sent }} Sent
-                            </span>
-                            <span class="badge bg-warning me-2">
-                                <i class="fas fa-envelope me-1"></i>{{ unread_notifications }} Unread
-                            </span>
-                            <span class="badge bg-success">
-                                <i class="fas fa-envelope-open me-1"></i>{{ read_notifications }} Read
-                            </span>
-                        </div>
-                        <button class="btn btn-outline-light btn-sm me-2" onclick="location.reload()" title="Refresh to see latest status">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                        <button class="btn btn-outline-light btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#notificationTracking">
-                            <i class="fas fa-chevron-down"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="collapse show" id="notificationTracking">
-                <div class="card-body p-0">
-                    {% if sent_notifications %}
-                    <div class="table-responsive">
-                        <table class="table table-hover mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th class="border-0">Notification</th>
-                                    <th class="border-0">Target</th>
-                                    <th class="border-0">Priority</th>
-                                    <th class="border-0">Sent Time</th>
-                                    <th class="border-0">Status</th>
-                                    <th class="border-0">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
+                    <!-- Notifications Panel -->
+                    <div class="tab-pane fade" id="notifications-panel" role="tabpanel">
+                        {% if sent_notifications %}
+                            <div class="row">
                                 {% for notification in sent_notifications %}
-                                <tr class="notification-row {% if not notification.is_read %}unread-notification{% endif %}">
-                                    <td>
-                                        <div class="notification-info">
-                                            <div class="fw-bold text-dark">{{ notification.title }}</div>
-                                            <div class="text-muted small">{{ notification.message|truncatechars:80 }}</div>
+                                <div class="col-lg-6 mb-3">
+                                    <div class="card h-100 border-start border-4 
+                                         {% if not notification.is_read %}border-primary
+                                         {% else %}border-success{% endif %}">
+                                        <div class="card-body">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h6 class="card-title mb-0">{{ notification.title }}</h6>
+                                                <span class="badge {% if not notification.is_read %}bg-primary{% else %}bg-success{% endif %}">
+                                                    {% if not notification.is_read %}Unread{% else %}Read{% endif %}
+                                                </span>
+                                            </div>
+                                            <p class="card-text small text-muted mb-2">{{ notification.message|truncatewords:20 }}</p>
                                             {% if notification.product %}
-                                            <div class="text-info small">
+                                            <div class="small text-info mb-2">
                                                 <i class="fas fa-box me-1"></i>{{ notification.product.name }}
                                             </div>
                                             {% endif %}
+                                            <div class="small text-muted">
+                                                <i class="fas fa-clock me-1"></i>Sent: {% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, H:i" }}{% endtimezone %}
+                                                {% if notification.is_read %}
+                                                    <br><i class="fas fa-check me-1"></i>Read: {% timezone "Asia/Kolkata" %}{{ notification.updated_at|date:"M d, H:i" }}{% endtimezone %}
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <span class="badge bg-primary">
-                                            <i class="fas fa-users me-1"></i>
-                                            {{ notification.target_user_role|title }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span class="badge priority-badge-{{ notification.priority }}">
-                                            {% if notification.priority == 'urgent' %}
-                                                <i class="fas fa-fire me-1"></i>URGENT
-                                            {% elif notification.priority == 'high' %}
-                                                <i class="fas fa-exclamation-triangle me-1"></i>HIGH
-                                            {% elif notification.priority == 'medium' %}
-                                                <i class="fas fa-info-circle me-1"></i>MEDIUM
-                                            {% else %}
-                                                <i class="fas fa-bell me-1"></i>LOW
-                                            {% endif %}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <div class="time-info">
-                                            <div class="fw-bold">{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, Y" }}{% endtimezone %}</div>
-                                            <div class="text-muted small">{% timezone "Asia/Kolkata" %}{{ notification.created_at|time:"H:i" }}{% endtimezone %}</div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No notifications sent yet</h5>
+                                <p class="text-muted">Use the Actions tab to send notifications to your team.</p>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Team Management Panel -->
+                    <div class="tab-pane fade" id="team-management-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12 mb-4">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="text-primary fw-bold mb-0">
+                                            <i class="fas fa-users me-2"></i>Team Management
+                                        </h5>
+                                        <p class="text-muted small mb-0">Manage your inventory team members and monitor their activity</p>
+                                    </div>
+                                    <div class="badge bg-primary fs-6">
+                                        {{ inventory_users|length }} Team Members
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Team Overview Cards -->
+                        <div class="row mb-4">
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-0 bg-gradient-primary text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-users fa-2x mb-2"></i>
+                                        <h4 class="mb-0">{{ inventory_users|length }}</h4>
+                                        <small>Total Team Members</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- <div class="col-md-4 mb-3">
+                                <div class="card border-0 bg-gradient-success text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-user-check fa-2x mb-2"></i>
+                                        <h4 class="mb-0">{{ active_inventory_users }}</h4>
+                                        <small>Active Members</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <div class="card border-0 bg-gradient-warning text-white">
+                                    <div class="card-body text-center">
+                                        <i class="fas fa-shield-alt fa-2x mb-2"></i>
+                                        <h4 class="mb-0">Admin</h4>
+                                        <small>Management Control</small>
+                                    </div>
+                                </div>
+                            </div> -->
+                        </div>
+
+                        <!-- Team Members List -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card shadow-sm border-0">
+                                    <div class="card-header bg-light">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0 fw-bold">
+                                                <i class="fas fa-address-book me-2"></i>Team Members Directory
+                                            </h6>
+                                            <small class="text-muted">Manage your inventory team</small>
                                         </div>
-                                    </td>
-                                    <td>
-                                        {% if notification.is_read %}
-                                            <div class="status-read">
-                                                <i class="fas fa-check-circle text-success me-2"></i>
-                                                <span class="text-success fw-bold">READ</span>
-                                                <div class="text-muted small">
-                                                    Read: {% timezone "Asia/Kolkata" %}{{ notification.safe_updated_at|date:"M d, H:i" }}{% endtimezone %}
-                                                </div>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        {% if inventory_users %}
+                                            <div class="table-responsive">
+                                                <table class="table table-hover mb-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th><i class="fas fa-user me-1"></i>Team Member</th>
+                                                            <th><i class="fas fa-envelope me-1"></i>Contact Info</th>
+                                                            <th><i class="fas fa-calendar me-1"></i>Joined Date</th>
+                                                            <th><i class="fas fa-check-circle me-1"></i>Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for user_data in inventory_users %}
+                                                        <tr>
+                                                            <td>
+                                                                <div class="d-flex align-items-center">
+                                                                    <div class="avatar-circle bg-primary text-white me-3">
+                                                                        {{ user_data.user.first_name|first|default:user_data.user.username|first|upper }}
+                                                                    </div>
+                                                                    <div>
+                                                                        <div class="fw-semibold">
+                                                                            {{ user_data.user.first_name|default:user_data.user.username }}
+                                                                            {% if user_data.user.last_name %}{{ user_data.user.last_name }}{% endif %}
+                                                                        </div>
+                                                                        <small class="text-muted">@{{ user_data.user.username }}</small>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                {% if user_data.user.email %}
+                                                                    <div class="d-flex flex-column">
+                                                                        <small class="text-muted">
+                                                                            <i class="fas fa-envelope me-1"></i>{{ user_data.user.email }}
+                                                                        </small>
+                                                                        <small class="text-success">
+                                                                            <i class="fas fa-check-circle me-1"></i>Verified
+                                                                        </small>
+                                                                    </div>
+                                                                {% else %}
+                                                                    <small class="text-muted">
+                                                                        <i class="fas fa-exclamation-triangle me-1"></i>No email provided
+                                                                    </small>
+                                                                {% endif %}
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex flex-column">
+                                                                    <small class="text-muted">
+                                                                        {% timezone "Asia/Kolkata" %}{{ user_data.user.date_joined|date:"M d, Y" }}{% endtimezone %}
+                                                                    </small>
+                                                                    <small class="text-info">
+                                                                        {% timezone "Asia/Kolkata" %}{{ user_data.user.date_joined|date:"H:i" }}{% endtimezone %}
+                                                                    </small>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <div class="d-flex justify-content-between align-items-center">
+                                                                    <span class="badge bg-success">
+                                                                        <i class="fas fa-user-check me-1"></i>Active Member
+                                                                    </span>
+                                                                    <button class="btn btn-outline-danger btn-sm"
+                                                                            onclick="deleteTeamMember('{{ user_data.user.id }}', '{{ user_data.user.username }}')"
+                                                                            title="Remove from team">
+                                                                        <i class="fas fa-trash me-1"></i>Delete
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         {% else %}
-                                            <div class="status-unread">
-                                                <i class="fas fa-envelope text-warning me-2"></i>
-                                                <span class="text-warning fw-bold">UNREAD</span>
-                                                <div class="text-muted small">Pending</div>
+                                            <div class="text-center py-5">
+                                                <i class="fas fa-users-slash fa-3x text-muted mb-3"></i>
+                                                <h5 class="text-muted">No Team Members Found</h5>
+                                                <p class="text-muted">Inventory team members will appear here when they join.</p>
+                                                <small class="text-info">
+                                                    <i class="fas fa-info-circle me-1"></i>Team members can be added through the signup process with inventory role.
+                                                </small>
                                             </div>
                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-outline-danger delete-notification-btn" 
-                                                data-notification-id="{{ notification.id }}" 
-                                                data-notification-title="{{ notification.title }}"
-                                                title="Delete notification">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    
-                    {% else %}
-                    <div class="text-center py-5">
-                        <i class="fas fa-paper-plane fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No Notifications Sent Yet</h5>
-                        <p class="text-muted">Use the form above to send notifications to your team.</p>
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="card-footer bg-light border-0">
-                    <div class="d-flex justify-content-end">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="location.reload()">
-                                <i class="fas fa-sync-alt me-1"></i>Refresh Status
-                            </button>
+
+                    <!-- Statistics Panel -->
+                    <div class="tab-pane fade" id="statistics-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-3 mb-4">
+                                <div class="card h-100 border-primary">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-boxes fa-3x text-primary"></i>
+                                        </div>
+                                        <h3 class="text-primary">{{ products|length }}</h3>
+                                        <h6 class="text-muted">Total Products</h6>
+                                        <p class="small text-muted mb-0">Active inventory items</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-4">
+                                <div class="card h-100 border-success">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-shopping-cart fa-3x text-success"></i>
+                                        </div>
+                                        <h3 class="text-success">{{ ordered_count }}</h3>
+                                        <h6 class="text-muted">Orders Placed</h6>
+                                        <p class="small text-muted mb-0">Successfully ordered items</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-4">
+                                <div class="card h-100 border-warning">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-clock fa-3x text-warning"></i>
+                                        </div>
+                                        <h3 class="text-warning">{{ pending_orders_count }}</h3>
+                                        <h6 class="text-muted">Pending Orders</h6>
+                                        <p class="small text-muted mb-0">Awaiting processing</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-4">
+                                <div class="card h-100 border-info">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-check-circle fa-3x text-info"></i>
+                                        </div>
+                                        <h3 class="text-info">{{ completed_orders_count }}</h3>
+                                        <h6 class="text-muted">Completed Orders</h6>
+                                        <p class="small text-muted mb-0">Admin Reviewed Orders</p>
+                                        <div class="mt-2">
+                                            <small class="text-info">
+                                                <i class="fas fa-eye me-1"></i>{{ admin_seen_count }} Admin Actions<br>
+                                                <i class="fas fa-box me-1"></i>{{ actual_received_count }} Stock Received
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -526,272 +824,471 @@
     </div>
 </div>
 
-<!-- Quick Stats -->
-<div class="row">
-    <div class="col-md-3">
-        <div class="card text-white bg-primary">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Total Products</h5>
-                        <h3>{{ stock_analysis|length }}</h3>
+<!-- Order Modal -->
+<div class="modal fade" id="orderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-shopping-cart me-2"></i>Create Order Request
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'create_order' %}" id="orderForm">
+                <div class="modal-body">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="orderProductName" class="form-label">Product Name</label>
+                        <input type="text" class="form-control" id="orderProductName" name="product" readonly>
+                        <input type="hidden" id="orderProductId" name="product_id">
+                        <div class="mt-2">
+                            <small class="text-muted">Current Stock: <span id="orderCurrentStock" class="fw-bold">-</span> units</small>
+                        </div>
                     </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-boxes fa-2x"></i>
+                    <div class="mb-3">
+                        <label for="orderQuantity" class="form-label">Quantity to Order</label>
+                        <input type="number" class="form-control" id="orderQuantity" name="quantity" min="1" required>
+                        <div class="form-text">Enter the quantity you want to order from supplier</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="orderNotes" class="form-label">Order Notes (Optional)</label>
+                        <textarea class="form-control" id="orderNotes" name="order_notes" rows="2" placeholder="Any special instructions or notes..."></textarea>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-danger">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Overstock</h5>
-                        <h3>{{ overstock_count }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-exclamation-triangle fa-2x"></i>
-                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-paper-plane me-1"></i>Send Order Request to Inventory
+                    </button>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-warning">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Reorder Needed</h5>
-                        <h3>{{ reorder_count }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-shopping-cart fa-2x"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card text-white bg-info">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <h5>Pending Orders</h5>
-                        <h3>{{ pending_orders_count }}</h3>
-                    </div>
-                    <div class="align-self-center">
-                        <i class="fas fa-clock fa-2x"></i>
-                    </div>
-                </div>
-            </div>
+            </form>
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<!-- Django Configuration -->
-<script type="application/json" id="admin-config">
-{
-    "hasUnreadNotifications": {% if unread_notifications > 0 %}true{% else %}false{% endif %},
-    "productsData": {{ products_json|safe }}
-}
-</script>
-
 <script>
-// Load configuration from JSON
-const adminConfigElement = document.getElementById('admin-config');
-const adminConfig = JSON.parse(adminConfigElement.textContent);
+// Initialize admin dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Admin dashboard loaded successfully');
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Set progress bar widths based on trend scores
+    document.querySelectorAll('.progress-bar[data-trend-score]').forEach(function(bar) {
+        const score = parseInt(bar.dataset.trendScore) || 0;
+        bar.style.width = (score * 10) + '%';
+    });
+    
+    // Initialize notification form enhancements
+    initializeNotificationForm();
+    
+    // Initialize order form handling
+    initializeOrderForm();
+    
+    console.log('✅ Admin dashboard initialization complete');
+});
+
+function initializeOrderForm() {
+    console.log('📋 Initializing order form...');
+    
+    const orderForm = document.getElementById('orderForm');
+    if (!orderForm) {
+        console.error('❌ Order form not found');
+        return;
+    }
+    
+    orderForm.addEventListener('submit', function(e) {
+        console.log('📤 Order form submitted');
+        
+        const productName = document.getElementById('orderProductName').value.trim();
+        const quantity = document.getElementById('orderQuantity').value.trim();
+        
+        console.log('📋 Form data:');
+        console.log('   - Product:', productName);
+        console.log('   - Quantity:', quantity);
+        
+        if (!productName) {
+            e.preventDefault();
+            alert('Error: Product name is missing. Please try again.');
+            return false;
+        }
+        
+        if (!quantity || parseInt(quantity) < 1) {
+            e.preventDefault();
+            alert('Error: Please enter a valid quantity (minimum 1).');
+            document.getElementById('orderQuantity').focus();
+            return false;
+        }
+        
+        // Show loading state
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating Order...';
+        submitBtn.disabled = true;
+        
+        console.log('✅ Form validation passed, submitting...');
+        
+        // Re-enable button after delay (in case of errors)
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 10000);
+        
+        return true;
+    });
+    
+    console.log('✅ Order form initialized');
+}
+
+function initializeNotificationForm() {
+    const productNameInput = document.getElementById('product_name');
+    const productCategoryInput = document.getElementById('product_category');
+    
+    if (productNameInput && productCategoryInput) {
+        // Auto-suggest category based on product name
+        productNameInput.addEventListener('input', function() {
+            const productName = this.value.trim().toLowerCase();
+            
+            // Simple category suggestions based on common product names
+            let suggestedCategory = '';
+            
+            if (productName.includes('milk') || productName.includes('cheese') || productName.includes('butter')) {
+                suggestedCategory = 'Dairy';
+            } else if (productName.includes('bread') || productName.includes('biscuit') || productName.includes('cake')) {
+                suggestedCategory = 'Bakery';
+            } else if (productName.includes('apple') || productName.includes('banana') || productName.includes('orange')) {
+                suggestedCategory = 'Fruits';
+            } else if (productName.includes('rice') || productName.includes('wheat') || productName.includes('flour')) {
+                suggestedCategory = 'Grains';
+            } else if (productName.includes('soap') || productName.includes('shampoo') || productName.includes('detergent')) {
+                suggestedCategory = 'Personal Care';
+            }
+            
+            if (suggestedCategory && !productCategoryInput.value) {
+                productCategoryInput.value = suggestedCategory;
+                // Add visual feedback
+                productCategoryInput.style.backgroundColor = '#e8f5e8';
+                setTimeout(() => {
+                    productCategoryInput.style.backgroundColor = '';
+                }, 1000);
+            }
+        });
+        
+        // Enhanced form validation and submission
+        const notificationForm = productNameInput.closest('form');
+        if (notificationForm) {
+            notificationForm.addEventListener('submit', function(e) {
+                const productName = document.getElementById('product_name').value.trim();
+                const category = document.getElementById('product_category').value.trim();
+                const title = document.getElementById('notification_title').value.trim();
+                const message = document.getElementById('admin_recommendation').value.trim();
+                
+                if (!productName || !category || !title || !message) {
+                    e.preventDefault();
+                    showErrorMessage('Please fill in all required fields.');
+                    return false;
+                }
+                
+                // Show loading state
+                this.classList.add('submitting');
+                const submitBtn = this.querySelector('button[type="submit"]');
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending Notification...';
+                submitBtn.disabled = true;
+                
+                // Re-enable button after delay (in case of errors)
+                setTimeout(() => {
+                    this.classList.remove('submitting');
+                    submitBtn.innerHTML = originalText;
+                    submitBtn.disabled = false;
+                }, 8000);
+            });
+        }
+    }
+    
+    // Initialize discount form enhancements
+    const discountForm = document.querySelector('.discount-form');
+    if (discountForm) {
+        discountForm.addEventListener('submit', function(e) {
+            const productSelect = this.querySelector('select[name="product"]');
+            const discountInput = this.querySelector('input[name="discount_percentage"]');
+            
+            if (!productSelect.value) {
+                e.preventDefault();
+                showErrorMessage('Please select a product for discount.');
+                productSelect.focus();
+                return false;
+            }
+            
+            const discountValue = parseFloat(discountInput.value);
+            if (isNaN(discountValue) || discountValue < 0 || discountValue > 100) {
+                e.preventDefault();
+                showErrorMessage('Please enter a valid discount percentage (0-100).');
+                discountInput.focus();
+                return false;
+            }
+            
+            // Show loading state
+            this.classList.add('submitting');
+            const submitBtn = this.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Applying Discount...';
+            submitBtn.disabled = true;
+            
+            // Re-enable button after delay (in case of errors)
+            setTimeout(() => {
+                this.classList.remove('submitting');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }, 8000);
+        });
+        
+        // Real-time discount preview
+        const discountInput = discountForm.querySelector('input[name="discount_percentage"]');
+        if (discountInput) {
+            discountInput.addEventListener('input', function() {
+                const value = parseFloat(this.value);
+                const inputGroup = this.closest('.input-group');
+                const percentSpan = inputGroup.querySelector('.input-group-text:last-child');
+                
+                if (!isNaN(value) && value >= 0 && value <= 100) {
+                    percentSpan.style.backgroundColor = '#28a745';
+                    percentSpan.style.color = 'white';
+                    percentSpan.style.borderColor = '#28a745';
+                } else {
+                    percentSpan.style.backgroundColor = '#dc3545';
+                    percentSpan.style.color = 'white';
+                    percentSpan.style.borderColor = '#dc3545';
+                }
+            });
+        }
+    }
+}
+
+function showErrorMessage(message) {
+    // Create error message toast
+    const alertDiv = document.createElement('div');
+    alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed';
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    alertDiv.innerHTML = `
+        <i class="fas fa-exclamation-triangle me-2"></i>${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 4 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 4000);
+}
 
 function setDiscountProduct(productId, productName) {
     const productSelect = document.querySelector('select[name="product"]');
-    productSelect.value = productId;
+    if (productSelect) {
+        productSelect.value = productId;
+    }
     
-    // Scroll to discount form
-    document.querySelector('.card-header .fa-tags').closest('.card').scrollIntoView({
-        behavior: 'smooth'
-    });
-}
-
-// Update current time display
-function updateCurrentTime() {
-    const now = new Date();
-    const timeString = now.toLocaleString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-    });
-    
-    const currentTimeElement = document.getElementById('currentTime');
-    if (currentTimeElement) {
-        currentTimeElement.textContent = timeString;
+    // Switch to actions tab
+    const actionsTab = document.getElementById('actions-orders-tab');
+    if (actionsTab) {
+        actionsTab.click();
     }
 }
 
-// Update product information when product name changes
-function updateProductInfo() {
-    const productName = document.getElementById('product_name').value.trim();
-    const productInfoSection = document.getElementById('productInfoSection');
-    const currentStockElement = document.getElementById('currentStock');
-    const trendScoreElement = document.getElementById('trendScore');
+function populateOrderModal(productName, productId, currentStock) {
+    console.log('� DEBUG: populateOrderModal function called');
+    console.log('📦 Parameters received:');
+    console.log('   - Product Name:', productName);
+    console.log('   - Product ID:', productId);
+    console.log('   - Current Stock:', currentStock);
     
-    if (productName.length > 2) {
-        // Show loading state
-        currentStockElement.textContent = 'Loading...';
-        trendScoreElement.textContent = 'Loading...';
-        productInfoSection.style.display = 'block';
-        
-        // Find matching product from the products list
-        const products = adminConfig.productsData || [];
-        
-        // Find exact or partial match
-        const matchedProduct = products.find(p => 
-            p.name.toLowerCase().includes(productName.toLowerCase()) ||
-            productName.toLowerCase().includes(p.name.toLowerCase())
-        );
-        
-        if (matchedProduct) {
-            currentStockElement.textContent = matchedProduct.stock;
-            currentStockElement.className = 'fw-bold text-success';
-            
-            trendScoreElement.textContent = matchedProduct.trendScore;
-            if (matchedProduct.trendScore >= 7) {
-                trendScoreElement.className = 'fw-bold text-success';
-            } else if (matchedProduct.trendScore >= 4) {
-                trendScoreElement.className = 'fw-bold text-warning';
-            } else {
-                trendScoreElement.className = 'fw-bold text-danger';
-            }
-            
-            // Auto-fill category if empty
-            const categoryField = document.getElementById('product_category');
-            if (!categoryField.value) {
-                categoryField.value = matchedProduct.category;
-            }
-        } else {
-            currentStockElement.textContent = 'Not found';
-            currentStockElement.className = 'fw-bold text-muted';
-            trendScoreElement.textContent = 'N/A';
-            trendScoreElement.className = 'fw-bold text-muted';
-        }
+    // Check if modal exists
+    const modal = document.getElementById('orderModal');
+    if (!modal) {
+        console.error('❌ Order modal not found!');
+        alert('Error: Order modal not found. Please refresh the page.');
+        return;
+    }
+    
+    // Populate product name field
+    const productNameField = document.getElementById('orderProductName');
+    if (productNameField) {
+        productNameField.value = productName;
+        console.log('✅ Product name field populated:', productName);
     } else {
-        productInfoSection.style.display = 'none';
+        console.error('❌ Product name field not found');
+    }
+    
+    // Populate hidden product ID field
+    const productIdField = document.getElementById('orderProductId');
+    if (productIdField) {
+        productIdField.value = productId;
+        console.log('✅ Product ID field populated:', productId);
+    } else {
+        console.error('❌ Product ID field not found');
+    }
+    
+    // Populate current stock display
+    const currentStockSpan = document.getElementById('orderCurrentStock');
+    if (currentStockSpan) {
+        currentStockSpan.textContent = currentStock;
+        console.log('✅ Current stock display populated:', currentStock);
+    } else {
+        console.error('❌ Current stock span not found');
+    }
+    
+    // Clear and focus quantity field
+    const quantityField = document.getElementById('orderQuantity');
+    if (quantityField) {
+        quantityField.value = '';
+        setTimeout(() => quantityField.focus(), 500); // Focus after modal opens
+        console.log('✅ Quantity field cleared and will be focused');
+    } else {
+        console.error('❌ Quantity field not found');
+    }
+    
+    // Clear notes field
+    const notesField = document.getElementById('orderNotes');
+    if (notesField) {
+        notesField.value = '';
+        console.log('✅ Notes field cleared');
+    } else {
+        console.error('❌ Notes field not found');
+    }
+    
+    // Show the modal
+    try {
+        const orderModal = new bootstrap.Modal(modal);
+        orderModal.show();
+        console.log('✅ Order modal shown successfully');
+        
+        // Add event listener for when modal is shown
+        modal.addEventListener('shown.bs.modal', function() {
+            console.log('🎯 Modal is now visible, focusing quantity field');
+            if (quantityField) {
+                quantityField.focus();
+            }
+        }, { once: true });
+        
+    } catch (error) {
+        console.error('❌ Error showing modal:', error);
+        alert('Error showing order modal: ' + error.message);
     }
 }
 
-// Validate notification form before submission
-function validateNotificationForm() {
-    const productName = document.getElementById('product_name').value.trim();
-    const productCategory = document.getElementById('product_category').value.trim();
-    const title = document.getElementById('notification_title').value.trim();
-    const recommendation = document.getElementById('admin_recommendation').value.trim();
+function markOrderAsSeen(orderId) {
+    console.log('👁️ Admin marking order as seen:', orderId);
     
-    if (!productName) {
-        showAdminToast('Validation Error', 'Please enter a product name.', 'error');
-        document.getElementById('product_name').focus();
-        return false;
+    // Show confirmation dialog
+    if (!confirm('Mark this order as seen?\n\nThis will indicate that you have reviewed the order details.')) {
+        return;
     }
     
-    if (!productCategory) {
-        showAdminToast('Validation Error', 'Please enter a product category.', 'error');
-        document.getElementById('product_category').focus();
-        return false;
+    // Get the button element
+    const button = document.querySelector(`button[data-order-id="${orderId}"]`);
+    if (!button) {
+        alert('Error: Button not found');
+        return;
     }
     
-    if (!title) {
-        showAdminToast('Validation Error', 'Please enter a notification title.', 'error');
-        document.getElementById('notification_title').focus();
-        return false;
-    }
-    
-    if (!recommendation) {
-        showAdminToast('Validation Error', 'Please enter your recommendation.', 'error');
-        document.getElementById('admin_recommendation').focus();
-        return false;
-    }
-    
-    // Show loading state on button
-    const button = event.target;
-    const originalContent = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Sending...';
+    // Show loading state
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Marking...';
     button.disabled = true;
     
-    // Re-enable button after a delay (in case of errors)
-    setTimeout(() => {
-        button.innerHTML = originalContent;
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        alert('Error: CSRF token not found. Please refresh the page.');
+        button.innerHTML = originalHTML;
         button.disabled = false;
-    }, 5000);
+        return;
+    }
     
-    showAdminToast('Sending Notification', 'Your detailed notification is being sent to the inventory team...', 'info');
-    return true;
+    // Create form data
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrfToken.value);
+    formData.append('order_id', orderId);
+    
+    // Send AJAX request
+    fetch('/admin-mark-order-seen/', {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response data:', data);
+        
+        if (data.success) {
+            // Update button to success state
+            button.innerHTML = '<i class="fas fa-check-circle me-1"></i>Received';
+            button.className = 'btn btn-sm btn-success receive-status-btn';
+            button.disabled = true;
+            button.title = `✅ Marked as seen by admin on ${data.seen_at}`;
+            
+            // Update completed orders count in header
+            if (data.updated_completed_count) {
+                const completedCountBadges = document.querySelectorAll('.badge.bg-info.fs-6');
+                completedCountBadges.forEach(badge => {
+                    if (badge.parentElement.querySelector('small')?.textContent.includes('Completed Orders')) {
+                        badge.textContent = data.updated_completed_count;
+                    }
+                });
+                
+                // Update statistics panel count
+                const statsCompletedElements = document.querySelectorAll('.text-info');
+                statsCompletedElements.forEach(element => {
+                    if (element.tagName === 'H3' && element.closest('.card-body')?.querySelector('h6')?.textContent.includes('Completed Orders')) {
+                        element.textContent = data.updated_completed_count;
+                    }
+                });
+            }
+            
+            // Show success message
+            showSuccessMessage('✅ Order marked as seen! Completed orders count updated.');
+            
+            // Update status badge if it's pending
+            const statusCell = button.closest('tr').querySelector('td:nth-child(3)');
+            if (statusCell && statusCell.textContent.includes('Pending')) {
+                statusCell.innerHTML = '<span class="badge bg-info order-status-badge"><i class="fas fa-eye me-1"></i>Seen by Admin</span>';
+            }
+            
+        } else {
+            console.error('Server error:', data.error);
+            alert('Error: ' + (data.error || 'Failed to mark order as seen'));
+            
+            // Restore button state
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Network error:', error);
+        alert('Network error. Please check your connection and try again.');
+        
+        // Restore button state
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    });
 }
 
-// Initialize time updates
-document.addEventListener('DOMContentLoaded', function() {
-    updateCurrentTime();
-    setInterval(updateCurrentTime, 1000); // Update every second
-    
-    // Initialize delete buttons
-    const deleteButtons = document.querySelectorAll('.delete-notification-btn');
-    
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            const notificationId = this.getAttribute('data-notification-id');
-            const notificationTitle = this.getAttribute('data-notification-title');
-            
-            // Show confirmation dialog
-            if (confirm(`Are you sure you want to delete this notification?\n\n"${notificationTitle}"\n\nThis action cannot be undone.`)) {
-                // Create and submit a form for reliable deletion
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = '/admin-panel/';
-                form.style.display = 'none';
-                
-                // Add CSRF token
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-                if (!csrfToken) {
-                    alert('Error: CSRF token not found. Please refresh the page.');
-                    return;
-                }
-                
-                const csrfInput = document.createElement('input');
-                csrfInput.type = 'hidden';
-                csrfInput.name = 'csrfmiddlewaretoken';
-                csrfInput.value = csrfToken.value;
-                form.appendChild(csrfInput);
-                
-                // Add delete notification flag
-                const deleteInput = document.createElement('input');
-                deleteInput.type = 'hidden';
-                deleteInput.name = 'delete_notification';
-                deleteInput.value = 'true';
-                form.appendChild(deleteInput);
-                
-                // Add notification ID
-                const idInput = document.createElement('input');
-                idInput.type = 'hidden';
-                idInput.name = 'notification_id';
-                idInput.value = notificationId;
-                form.appendChild(idInput);
-                
-                // Submit form
-                document.body.appendChild(form);
-                form.submit();
-            }
-        });
-    });
-});
-
-// Helper function to show success message
 function showSuccessMessage(message) {
+    // Create a temporary success message
     const alertDiv = document.createElement('div');
     alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
     alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
@@ -810,185 +1307,685 @@ function showSuccessMessage(message) {
     }, 3000);
 }
 
-// Admin toast notification function
-function showAdminToast(title, message, type = 'info') {
-    const toastContainer = document.querySelector('.toast-container') || createToastContainer();
-    const toastId = 'admin-toast-' + Date.now();
+// Product Autocomplete Functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const productNameInput = document.getElementById('product_name');
+    const productCategoryInput = document.getElementById('product_category');
+    const suggestionsDiv = document.getElementById('product_suggestions');
+    let debounceTimer;
     
-    const toastHTML = `
-        <div id="${toastId}" class="toast admin-toast" role="alert">
-            <div class="toast-header bg-${type} text-white">
-                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-triangle' : 'info-circle'} me-2"></i>
-                <strong class="me-auto">${title}</strong>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body">
-                ${message}
-            </div>
-        </div>
-    `;
-    
-    toastContainer.insertAdjacentHTML('beforeend', toastHTML);
-    
-    const toastElement = document.getElementById(toastId);
-    const toast = new bootstrap.Toast(toastElement, { autohide: true, delay: 4000 });
-    toast.show();
-    
-    toastElement.addEventListener('hidden.bs.toast', function() {
-        this.remove();
-    });
-}
-
-function createToastContainer() {
-    const container = document.createElement('div');
-    container.className = 'toast-container position-fixed top-0 end-0 p-3';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-    return container;
-}
-
-// Auto-refresh notification status every 2 minutes
-setInterval(() => {
-    if (document.hasFocus()) {
-        // Update read status indicators without full page reload
-        updateNotificationStatus();
+    if (productNameInput && productCategoryInput && suggestionsDiv) {
+        // Handle input events for product autocomplete
+        productNameInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            // Clear previous timer
+            clearTimeout(debounceTimer);
+            
+            if (query.length < 1) {
+                hideSuggestions();
+                return;
+            }
+            
+            // Debounce the search to avoid too many requests
+            debounceTimer = setTimeout(() => {
+                searchProducts(query);
+            }, 300);
+        });
+        
+        // Hide suggestions when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!productNameInput.contains(e.target) && !suggestionsDiv.contains(e.target)) {
+                hideSuggestions();
+            }
+        });
+        
+        // Handle keyboard navigation
+        productNameInput.addEventListener('keydown', function(e) {
+            const suggestions = suggestionsDiv.querySelectorAll('.dropdown-item');
+            const activeSuggestion = suggestionsDiv.querySelector('.dropdown-item.active');
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (activeSuggestion) {
+                    activeSuggestion.classList.remove('active');
+                    const next = activeSuggestion.nextElementSibling;
+                    if (next) {
+                        next.classList.add('active');
+                    } else {
+                        suggestions[0]?.classList.add('active');
+                    }
+                } else {
+                    suggestions[0]?.classList.add('active');
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (activeSuggestion) {
+                    activeSuggestion.classList.remove('active');
+                    const prev = activeSuggestion.previousElementSibling;
+                    if (prev) {
+                        prev.classList.add('active');
+                    } else {
+                        suggestions[suggestions.length - 1]?.classList.add('active');
+                    }
+                } else {
+                    suggestions[suggestions.length - 1]?.classList.add('active');
+                }
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (activeSuggestion) {
+                    activeSuggestion.click();
+                }
+            } else if (e.key === 'Escape') {
+                hideSuggestions();
+            }
+        });
     }
-}, 120000);
+    
+    function searchProducts(query) {
+        fetch(`/api/product-autocomplete/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.products && data.products.length > 0) {
+                    showSuggestions(data.products);
+                } else {
+                    hideSuggestions();
+                }
+            })
+            .catch(error => {
+                console.error('Error searching products:', error);
+                hideSuggestions();
+            });
+    }
+    
+    function showSuggestions(products) {
+        suggestionsDiv.innerHTML = '';
+        
+        products.forEach(product => {
+            const item = document.createElement('a');
+            item.className = 'dropdown-item d-flex justify-content-between align-items-center';
+            item.href = '#';
+            item.innerHTML = `
+                <div>
+                    <strong>${product.name}</strong>
+                    <br>
+                    <small class="text-muted">${product.category}</small>
+                </div>
+                <i class="fas fa-arrow-right text-primary"></i>
+            `;
+            
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                selectProduct(product);
+            });
+            
+            suggestionsDiv.appendChild(item);
+        });
+        
+        suggestionsDiv.style.display = 'block';
+        suggestionsDiv.classList.add('show');
+    }
+    
+    function hideSuggestions() {
+        suggestionsDiv.style.display = 'none';
+        suggestionsDiv.classList.remove('show');
+        // Remove active class from all items
+        suggestionsDiv.querySelectorAll('.dropdown-item').forEach(item => {
+            item.classList.remove('active');
+        });
+    }
+    
+    function selectProduct(product) {
+        productNameInput.value = product.name;
+        productCategoryInput.value = product.category;
+        
+        // Remove readonly attribute temporarily to allow form submission
+        productCategoryInput.removeAttribute('readonly');
+        
+        // Add readonly back after a short delay
+        setTimeout(() => {
+            productCategoryInput.setAttribute('readonly', true);
+        }, 100);
+        
+        hideSuggestions();
+        
+        // Show success feedback
+        productNameInput.classList.add('is-valid');
+        productCategoryInput.classList.add('is-valid');
+        
+        setTimeout(() => {
+            productNameInput.classList.remove('is-valid');
+            productCategoryInput.classList.remove('is-valid');
+        }, 2000);
+    }
+});
 
-// Auto-refresh every 30 seconds if there are unread notifications
-if (adminConfig.hasUnreadNotifications) {
-    setInterval(() => {
-        if (document.hasFocus()) {
-            console.log('Auto-refreshing admin dashboard for unread notifications...');
-            location.reload();
+// Event delegation for admin mark seen buttons
+document.addEventListener('click', function(e) {
+    if (e.target.closest('.admin-mark-seen-btn')) {
+        e.preventDefault();
+        const button = e.target.closest('.admin-mark-seen-btn');
+        const orderId = button.getAttribute('data-order-id');
+        if (orderId) {
+            markOrderAsSeen(orderId);
         }
-    }, 30000); // 30 seconds
-}
+    }
+});
 
-function updateNotificationStatus() {
-    // This would typically make an AJAX call to check for status updates
-    // For now, just update the timestamp
-    const refreshButton = document.querySelector('button[onclick="refreshNotificationStatus()"]');
-    if (refreshButton) {
-        const now = new Date().toLocaleTimeString();
-        refreshButton.title = `Last checked: ${now}`;
+// Team Management Functions - Delete functionality
+function deleteTeamMember(userId, username) {
+    console.log('🔧 DEBUG: Delete function called for user:', userId, username);
+    
+    // Confirmation dialog
+    const confirmDelete = confirm(
+        `⚠️ DELETE TEAM MEMBER\n\n` +
+        `Are you sure you want to remove "${username}" from your inventory team?\n\n` +
+        `This action will:\n` +
+        `• Remove their access to the inventory system\n` +
+        `• Delete their user account permanently\n` +
+        `• Remove them from all orders and notifications\n` +
+        `• Cannot be undone\n\n` +
+        `Click OK to confirm deletion.`
+    );
+    
+    if (confirmDelete) {
+        console.log('🔧 DEBUG: First confirmation passed');
+        
+        const confirmText = prompt(`To confirm deletion of "${username}", type "DELETE" (in capital letters):`);
+        
+        if (confirmText === 'DELETE') {
+            console.log('🔧 DEBUG: Second confirmation passed, proceeding with deletion');
+            
+            // Show loading state
+            const button = document.querySelector(`button[onclick*="deleteTeamMember('${userId}'"]`);
+            console.log('🔧 DEBUG: Found button:', button);
+            
+            if (button) {
+                const originalHTML = button.innerHTML;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Deleting...';
+                button.disabled = true;
+            }
+            
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            console.log('🔧 DEBUG: CSRF token found:', csrfToken);
+            
+            if (!csrfToken) {
+                alert('Error: CSRF token not found. Please refresh the page.');
+                if (button) {
+                    button.innerHTML = originalHTML;
+                    button.disabled = false;
+                }
+                return;
+            }
+            
+            console.log('🔧 DEBUG: Sending delete request...');
+            
+            // Send delete request
+            fetch('/delete-team-member/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: `csrfmiddlewaretoken=${csrfToken.value}&user_id=${userId}`
+            })
+            .then(response => {
+                console.log('🔧 DEBUG: Response received:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('🔧 DEBUG: Response data:', data);
+                
+                if (data.success) {
+                    console.log('🔧 DEBUG: Delete successful, removing row');
+                    
+                    // Remove the row from table
+                    const row = button.closest('tr');
+                    if (row) {
+                        row.style.transition = 'all 0.3s ease';
+                        row.style.opacity = '0';
+                        row.style.transform = 'translateX(-100%)';
+                        
+                        setTimeout(() => {
+                            row.remove();
+                            
+                            // Update team count if badge exists
+                            const badge = document.querySelector('.badge.bg-primary.fs-6');
+                            if (badge) {
+                                const currentCount = parseInt(badge.textContent.match(/\\d+/)[0]);
+                                if (currentCount > 0) {
+                                    badge.textContent = `${currentCount - 1} Team Members`;
+                                }
+                            }
+                            
+                            // Show success message
+                            alert(`✅ Team member "${username}" has been successfully deleted from the system.`);
+                        }, 300);
+                    }
+                } else {
+                    console.log('🔧 DEBUG: Delete failed:', data.error);
+                    alert(`❌ Error: ${data.error || 'Failed to delete team member'}`);
+                    // Restore button
+                    if (button) {
+                        button.innerHTML = originalHTML;
+                        button.disabled = false;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('🔧 DEBUG: Network error:', error);
+                alert('❌ Network error occurred. Please try again.');
+                // Restore button
+                if (button) {
+                    button.innerHTML = originalHTML;
+                    button.disabled = false;
+                }
+            });
+        } else if (confirmText !== null) {
+            console.log('🔧 DEBUG: Second confirmation failed');
+            alert('❌ Deletion cancelled. You must type "DELETE" exactly to confirm.');
+        }
+    } else {
+        console.log('🔧 DEBUG: First confirmation cancelled');
     }
 }
 </script>
 
 <style>
-/* Notification tracking styles */
-.bg-gradient-info {
-    background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
-}
-
-.notification-row {
+/* Modern Tab Styling */
+.nav-tabs .nav-link {
+    border: none;
+    border-radius: 0;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 12px 20px;
     transition: all 0.3s ease;
 }
 
-.notification-row:hover {
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #0d6efd;
     background-color: #f8f9fa;
-    transform: translateX(2px);
 }
 
-.unread-notification {
-    border-left: 4px solid #ffc107;
-    background-color: rgba(255, 193, 7, 0.05);
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    border-bottom: 2px solid #0d6efd;
 }
 
-.notification-info {
-    max-width: 300px;
+/* Card Hover Effects */
+.card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
 }
 
-.priority-badge-urgent {
-    background: linear-gradient(45deg, #dc3545, #c82333);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-.priority-badge-high {
-    background: linear-gradient(45deg, #fd7e14, #e55a00);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.priority-badge-medium {
-    background: linear-gradient(45deg, #007bff, #0056b3);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.priority-badge-low {
-    background: linear-gradient(45deg, #6c757d, #545b62);
-    color: white;
-    padding: 0.25rem 0.5rem;
-    border-radius: 12px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.status-read, .status-unread {
+/* Product Avatar */
+.product-avatar {
+    width: 32px;
+    height: 32px;
+    background: rgba(0, 123, 255, 0.1);
+    border-radius: 8px;
     display: flex;
     align-items: center;
-    flex-direction: column;
-    text-align: center;
+    justify-content: center;
 }
 
-.time-info {
-    text-align: center;
+/* Button Styling */
+.btn {
+    transition: all 0.2s ease;
 }
 
-.notification-stats .badge {
-    font-size: 0.8rem;
-    padding: 0.5rem 0.75rem;
+.btn:hover {
+    transform: scale(1.02);
 }
 
-.admin-toast {
-    min-width: 300px;
-    border: none;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+/* Table Styling */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
 }
 
-.btn-group .btn {
-    border-radius: 4px;
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
 }
 
-.btn-group .btn:not(:last-child) {
-    margin-right: 2px;
+/* Form Styling */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
-/* Condition badges */
-.condition-normal { background-color: #28a745; color: white; }
-.condition-reorderneeded { background-color: #ffc107; color: #212529; }
-.condition-nearexpiry { background-color: #fd7e14; color: white; }
-.condition-expired { background-color: #dc3545; color: white; }
-.condition-overstock { background-color: #6f42c1; color: white; }
+/* Progress Bars */
+.progress {
+    border-radius: 10px;
+    overflow: hidden;
+}
 
-/* Responsive design */
+.progress-bar {
+    border-radius: 10px;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
-    .notification-info {
-        max-width: 200px;
+    .nav-tabs .nav-link {
+        padding: 8px 12px;
+        font-size: 0.9rem;
     }
     
-    .notification-stats {
-        flex-direction: column;
-        gap: 0.5rem;
+    .card-body {
+        padding: 1rem;
     }
     
-    .notification-stats .badge {
-        font-size: 0.7rem;
+    .btn-sm {
+        font-size: 0.8rem;
         padding: 0.25rem 0.5rem;
     }
 }
+
+/* Loading States */
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Enhanced Actions & Orders Panel Styling */
+.discount-card, .notification-card, .order-queue-card {
+    transition: all 0.3s ease;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.discount-card:hover, .notification-card:hover, .order-queue-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+}
+
+/* Gradient Headers */
+.bg-gradient-warning {
+    background: linear-gradient(135deg, #ffc107 0%, #ffb300 100%);
+}
+
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd 0%, #0056b3 100%);
+}
+
+.bg-gradient-info {
+    background: linear-gradient(135deg, #0dcaf0 0%, #0891b2 100%);
+}
+
+/* Icon Wrappers */
+.icon-wrapper {
+    width: 40px;
+    height: 40px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+/* Form Enhancements */
+.discount-form .form-control, 
+.notification-form .form-control,
+.discount-form .form-select,
+.notification-form .form-select {
+    border-radius: 8px;
+    border: 1px solid #e0e6ed;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.discount-form .form-control:focus, 
+.notification-form .form-control:focus,
+.discount-form .form-select:focus,
+.notification-form .form-select:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+    transform: translateY(-1px);
+}
+
+/* Input Group Styling */
+.input-group-text {
+    border-radius: 8px;
+    border: 1px solid #e0e6ed;
+}
+
+.input-group .form-control {
+    border-left: 0;
+    border-right: 0;
+}
+
+.input-group .form-control:focus {
+    box-shadow: none;
+}
+
+/* Button Enhancements */
+.btn-lg {
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-lg:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+/* Order Queue Enhancements */
+.order-queue-container {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.order-queue-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.order-queue-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.order-queue-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.order-queue-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.order-item {
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.order-item:hover {
+    background-color: #f8f9fa;
+    transform: translateX(5px);
+}
+
+.order-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.order-item:hover::before {
+    background: linear-gradient(135deg, #0dcaf0 0%, #0891b2 100%);
+}
+
+/* Badge Enhancements */
+.badge {
+    font-weight: 500;
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+}
+
+/* Form Text Styling */
+.form-text {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+
+/* Priority Select Styling */
+#notification_priority option {
+    padding: 0.5rem;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    .discount-card, .notification-card, .order-queue-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    .icon-wrapper {
+        width: 35px;
+        height: 35px;
+    }
+    
+    .btn-lg {
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+    }
+}
+
+/* Animation for form submission */
+.discount-form.submitting .btn,
+.notification-form.submitting .btn {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.discount-form.submitting .btn::after,
+.notification-form.submitting .btn::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    margin-left: 10px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+/* Empty State Styling */
+.text-center.py-4 {
+    color: #6c757d;
+}
+
+.text-center.py-4 i {
+    opacity: 0.5;
+}
+
+/* Product Autocomplete Styling */
+#product_suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+#product_suggestions .dropdown-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f8f9fa;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+#product_suggestions .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+#product_suggestions .dropdown-item:hover,
+#product_suggestions .dropdown-item.active {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+#product_suggestions .dropdown-item strong {
+    color: #2c3e50;
+}
+
+#product_suggestions .dropdown-item .text-muted {
+    font-size: 0.875rem;
+}
+
+/* Enhanced form validation feedback */
+.form-control.is-valid {
+    border-color: #28a745;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='m2.3 6.73.94-.94 1.38 1.38 3.72-3.72.94.94-4.66 4.66z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Readonly field styling */
+.form-control[readonly] {
+    background-color: #f8f9fa;
+    opacity: 1;
+}
+
+/* Team Management Styling */
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+}
+
+.progress {
+    border-radius: 10px;
+}
+
+.progress-bar {
+    border-radius: 10px;
+}
+
+/* Team cards hover effects */
+.card:hover {
+    transform: translateY(-2px);
+    transition: all 0.3s ease;
+}
+
+/* Button group styling */
+.btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
 </style>
 {% endblock %}
-

@@ -94,16 +94,40 @@ class OrderQueue(models.Model):
         ('received', 'Received'),
     ]
     
+    INVENTORY_ACTION_CHOICES = [
+        ('none', 'No Action'),
+        ('acknowledged', 'Acknowledged'),
+        ('ordered', 'Ordered with Supplier'),
+    ]
+    
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     quantity = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # New fields for enhanced workflow
+    ordered_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True)  # Admin who created order
+    message_sent = models.BooleanField(default=False)  # Whether notification was sent to inventory
+    message_received = models.BooleanField(default=False)  # Whether inventory acknowledged the message
+    message_received_at = models.DateTimeField(null=True, blank=True)  # When inventory acknowledged
+    order_notes = models.TextField(blank=True, null=True)  # Additional notes from admin
+    
+    # New fields for inventory action tracking
+    inventory_action = models.CharField(max_length=20, choices=INVENTORY_ACTION_CHOICES, default='none')  # What inventory did
+    inventory_action_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='inventory_actions')  # Who from inventory took action
+    inventory_action_at = models.DateTimeField(null=True, blank=True)  # When inventory took action
+    admin_marked_received = models.BooleanField(default=False)  # Whether admin marked as received (final step)
+    admin_marked_received_at = models.DateTimeField(null=True, blank=True)  # When admin marked as received
+    
+    def __str__(self):
+        return f"Order: {self.product.name} - {self.quantity} units ({self.status})"
 
 class SalesBill(models.Model):
     bill_number = models.CharField(max_length=50, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True)  # Track who created the bill
 
 class SalesBillItem(models.Model):
     bill = models.ForeignKey(SalesBill, on_delete=models.CASCADE, related_name='items')

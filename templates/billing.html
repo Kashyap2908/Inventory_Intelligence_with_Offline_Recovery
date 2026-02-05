@@ -14,21 +14,65 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
-                            <i class="fas fa-warehouse me-1"></i>Inventory
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'billing' %}">
-                            <i class="fas fa-receipt me-1"></i>Billing
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'admin_dashboard' %}">
-                            <i class="fas fa-cog me-1"></i>Admin
-                        </a>
-                    </li>
+                    {% if user.userprofile.role == 'inventory' %}
+                        <!-- Inventory users: Inventory + Billing -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'admin' %}
+                        <!-- Admin users: Inventory + Trends + Billing + Admin -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'marketing' %}
+                        <!-- Marketing users: Only Trends -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                    {% else %}
+                        <!-- Fallback: Show all options -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown">
@@ -48,213 +92,282 @@
 {% endblock %}
 
 {% block content %}
-<!-- Header -->
+<!-- Header with Quick Stats -->
 <div class="row mb-4">
     <div class="col-12">
-        <div>
-            <h2 class="mb-1">Billing & Sales</h2>
-            <p class="text-muted mb-0">Process sales with FEFO stock deduction</p>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">My Billing & Sales</h2>
+                <p class="text-muted mb-0">
+                    <i class="fas fa-user me-1"></i>{{ user.first_name|default:user.username }}'s Sales Dashboard | Process sales with FEFO stock deduction
+                </p>
+            </div>
+            <div class="d-flex gap-3">
+                <div class="text-center">
+                    <div class="badge bg-primary fs-6">₹{{ today_sales_amount|floatformat:0 }}</div>
+                    <small class="text-muted d-block">Today's Sales</small>
+                </div>
+                <div class="text-center">
+                    <div class="badge bg-success fs-6">{{ today_sales_count }}</div>
+                    <small class="text-muted d-block">Bills Today</small>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Sales Statistics -->
-<div class="row mb-4">
-    <div class="col-md-4 mb-3">
-        <div class="stats-card">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <p class="stats-label">Today's Sales</p>
-                    <h3 class="stats-number">₹{{ today_sales_amount|floatformat:2 }}</h3>
-                </div>
-                <div class="stats-icon bg-primary text-white">
-                    <i class="fas fa-rupee-sign"></i>
-                </div>
-            </div>
-            <p class="small text-muted mb-0">{{ today_sales_count }} transactions today</p>
-        </div>
-    </div>
-    <div class="col-md-4 mb-3">
-        <div class="stats-card">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <p class="stats-label">Today's Bills</p>
-                    <h3 class="stats-number">{{ today_sales_count }}</h3>
-                </div>
-                <div class="stats-icon bg-success text-white">
-                    <i class="fas fa-receipt"></i>
-                </div>
-            </div>
-            <p class="small text-muted mb-0">Total transactions processed</p>
-        </div>
-    </div>
-    <div class="col-md-4 mb-3">
-        <div class="stats-card">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <p class="stats-label">Monthly Sales</p>
-                    <h3 class="stats-number">₹{{ monthly_sales_amount|floatformat:2 }}</h3>
-                </div>
-                <div class="stats-icon bg-info text-white">
-                    <i class="fas fa-calendar-alt"></i>
-                </div>
-            </div>
-            <p class="small text-muted mb-0">{{ monthly_sales_count }} transactions in {{ current_month_name }}</p>
-        </div>
-    </div>
-</div>
-
-<!-- Main Content -->
+<!-- Main Dashboard Tabs -->
 <div class="row">
-    <!-- Sales Form -->
-    <div class="col-lg-8 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Create New Bill - Multiple Products</h5>
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <ul class="nav nav-tabs card-header-tabs" id="billingTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="create-bill-tab" data-bs-toggle="tab" data-bs-target="#create-bill-panel" type="button" role="tab">
+                            <i class="fas fa-plus me-2"></i>Create Bill
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="recent-bills-tab" data-bs-toggle="tab" data-bs-target="#recent-bills-panel" type="button" role="tab">
+                            <i class="fas fa-history me-2"></i>Recent Bills
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="sales-stats-tab" data-bs-toggle="tab" data-bs-target="#sales-stats-panel" type="button" role="tab">
+                            <i class="fas fa-chart-bar me-2"></i>Sales Statistics
+                        </button>
+                    </li>
+                </ul>
             </div>
             <div class="card-body">
-                <!-- Add Product Section -->
-                <div class="mb-4">
-                    <h6 class="text-primary"><i class="fas fa-plus me-1"></i>Add Products to Bill</h6>
-                    <div class="row">
-                        <div class="col-md-5">
-                            <label class="form-label">Select Product</label>
-                            <input type="text" id="product-search" class="form-control product-autocomplete" 
-                                   placeholder="Type product name..." autocomplete="off">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Quantity</label>
-                            <input type="number" id="product-quantity" class="form-control" 
-                                   placeholder="Enter quantity" min="1">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Price</label>
-                            <input type="text" id="product-price" class="form-control" 
-                                   placeholder="₹0.00" readonly>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">&nbsp;</label>
-                            <button type="button" id="add-product-btn" class="btn btn-success w-100" disabled>
-                                <i class="fas fa-plus me-1"></i>Add
-                            </button>
-                        </div>
-                    </div>
-                    <div class="mt-2">
-                        <small class="text-muted">Available Stock: <span id="available-stock-info">Select a product</span></small>
-                    </div>
-                </div>
-
-                <!-- Selected Products Table -->
-                <div class="mb-4">
-                    <h6 class="text-primary"><i class="fas fa-list me-1"></i>Selected Products</h6>
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="selected-products-table">
-                            <thead class="table-dark">
-                                <tr>
-                                    <th>Product Name</th>
-                                    <th>Quantity</th>
-                                    <th>Unit Price</th>
-                                    <th>Total</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody id="selected-products-body">
-                                <tr id="no-products-row">
-                                    <td colspan="5" class="text-center text-muted">
-                                        <i class="fas fa-shopping-cart me-1"></i>No products added yet
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Bill Summary -->
-                <div class="mb-4" id="bill-summary" style="display: none;">
-                    <div class="card bg-primary text-white">
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-8">
-                                    <h6 class="mb-1"><i class="fas fa-receipt me-1"></i>Bill Summary</h6>
-                                    <small class="opacity-75">Total Items: <span id="total-items">0</span></small>
+                <div class="tab-content" id="billingTabContent">
+                    
+                    <!-- Create Bill Panel -->
+                    <div class="tab-pane fade show active" id="create-bill-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12">
+                                <!-- Add Product Section -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-plus me-1"></i>Add Products to Bill</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <label class="form-label">Select Product</label>
+                                                <input type="text" id="product-search" class="form-control product-autocomplete" 
+                                                       placeholder="Type product name..." autocomplete="off">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Quantity</label>
+                                                <input type="number" id="product-quantity" class="form-control" 
+                                                       placeholder="Enter quantity" min="1">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Price</label>
+                                                <input type="text" id="product-price" class="form-control" 
+                                                       placeholder="₹0.00" readonly>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" id="add-product-btn" class="btn btn-success w-100" disabled>
+                                                    <i class="fas fa-plus me-1"></i>Add
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted">Available Stock: <span id="available-stock-info">Select a product</span></small>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="col-md-4 text-end">
-                                    <h4 class="mb-0" id="grand-total">₹0.00</h4>
-                                    <small class="opacity-75">Grand Total</small>
+
+                                <!-- Selected Products -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0"><i class="fas fa-list me-1"></i>Selected Products</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" id="selected-products-table">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th><i class="fas fa-box me-1"></i>Product Name</th>
+                                                        <th><i class="fas fa-sort-numeric-up me-1"></i>Quantity</th>
+                                                        <th><i class="fas fa-rupee-sign me-1"></i>Unit Price</th>
+                                                        <th><i class="fas fa-calculator me-1"></i>Total</th>
+                                                        <th><i class="fas fa-cog me-1"></i>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="selected-products-body">
+                                                    <tr id="no-products-row">
+                                                        <td colspan="5" class="text-center text-muted py-4">
+                                                            <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                                                            <br>No products added yet
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bill Summary & Create Button -->
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="card bg-primary text-white" id="bill-summary" style="display: none;">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-1"><i class="fas fa-receipt me-1"></i>Bill Summary</h6>
+                                                        <small class="opacity-75">Total Items: <span id="total-items">0</span></small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <h4 class="mb-0" id="grand-total">₹0.00</h4>
+                                                        <small class="opacity-75">Grand Total</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <form method="post" id="multi-product-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" id="products-data" name="products_data" value="">
+                                            <button type="submit" id="create-bill-btn" class="btn btn-warning btn-lg w-100 h-100" disabled>
+                                                <i class="fas fa-file-invoice me-1"></i>Create Bill
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Create Bill Button -->
-                <form method="post" id="multi-product-form">
-                    {% csrf_token %}
-                    <input type="hidden" id="products-data" name="products_data" value="">
-                    <button type="submit" id="create-bill-btn" class="btn btn-primary btn-lg w-100" disabled>
-                        <i class="fas fa-file-invoice me-1"></i>Create Bill
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Recent Bills -->
-    <div class="col-lg-4 mb-4">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Bills</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Bill Number</th>
-                                <th>Date & Time</th>
-                                <th>Total Amount</th>
-                                <th>Items</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for bill in recent_bills %}
-                            <tr>
-                                <td><strong>{{ bill.bill_number }}</strong></td>
-                                <td class="bill-time" data-created-time="{{ bill.created_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ bill.created_at|date:"M d, H:i" }}{% endtimezone %}</td>
-                                <td><strong>₹{{ bill.total_amount }}</strong></td>
-                                <td>{{ bill.items.count }} item{{ bill.items.count|pluralize }}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-primary" 
-                                            onclick="viewBillDetails('{{ bill.id }}')" 
-                                            title="View Bill Details"
-                                            data-bs-toggle="tooltip">
-                                        <i class="fas fa-eye me-1"></i>View
-                                    </button>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">
-                                    No recent bills
-                                    <br>
-                                    <small>Create a sale to see bills here</small>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                    
-                    <!-- Debug Section (Remove in production) -->
-                    {% if recent_bills %}
-                    <div class="mt-3 p-2 bg-light rounded">
-                        <small class="text-muted">
-                            <i class="fas fa-info-circle me-1"></i>
-                            Found {{ recent_bills|length }} bill{{ recent_bills|length|pluralize }}. 
-                            Click the "View" button to see bill details.
-                        </small>
+                    <!-- Recent Bills Panel -->
+                    <div class="tab-pane fade" id="recent-bills-panel" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-hashtag me-1"></i>Bill Number</th>
+                                        <th><i class="fas fa-calendar me-1"></i>Date & Time</th>
+                                        <th><i class="fas fa-rupee-sign me-1"></i>Total Amount</th>
+                                        <th><i class="fas fa-boxes me-1"></i>Items</th>
+                                        <th><i class="fas fa-cog me-1"></i>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for bill in recent_bills %}
+                                    <tr>
+                                        <td><strong class="text-primary">{{ bill.bill_number }}</strong></td>
+                                        <td class="bill-time" data-created-time="{{ bill.created_at|date:'c' }}">
+                                            {% timezone "Asia/Kolkata" %}{{ bill.created_at|date:"M d, H:i" }}{% endtimezone %}
+                                        </td>
+                                        <td><strong class="text-success">₹{{ bill.total_amount }}</strong></td>
+                                        <td>
+                                            <span class="badge bg-info">{{ bill.items.count }} item{{ bill.items.count|pluralize }}</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary" 
+                                                    onclick="viewBillDetails('{{ bill.id }}')" 
+                                                    title="View Bill Details"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="fas fa-eye me-1"></i>View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted py-4">
+                                            <i class="fas fa-receipt fa-2x mb-2"></i>
+                                            <br>No recent bills
+                                            <br><small>Create a sale to see bills here</small>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    {% endif %}
+
+                    <!-- Sales Statistics Panel -->
+                    <div class="tab-pane fade" id="sales-stats-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-primary">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-rupee-sign fa-3x text-primary"></i>
+                                        </div>
+                                        <h3 class="text-primary">₹{{ today_sales_amount|floatformat:2 }}</h3>
+                                        <h6 class="text-muted">My Today's Sales</h6>
+                                        <p class="small text-muted mb-0">{{ today_sales_count }} transactions today</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-success">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-receipt fa-3x text-success"></i>
+                                        </div>
+                                        <h3 class="text-success">{{ today_sales_count }}</h3>
+                                        <h6 class="text-muted">My Today's Bills</h6>
+                                        <p class="small text-muted mb-0">Total transactions processed</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-info">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-calendar-alt fa-3x text-info"></i>
+                                        </div>
+                                        <h3 class="text-info">₹{{ monthly_sales_amount|floatformat:2 }}</h3>
+                                        <h6 class="text-muted">My Monthly Sales</h6>
+                                        <p class="small text-muted mb-0">{{ monthly_sales_count }} transactions in {{ current_month_name }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Stats Row -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0"><i class="fas fa-chart-line me-1"></i>My Sales Performance</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-primary">₹{{ today_sales_amount|floatformat:0 }}</h5>
+                                                    <small class="text-muted">Today</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-success">₹{{ monthly_sales_amount|floatformat:0 }}</h5>
+                                                    <small class="text-muted">This Month</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-info">{{ today_sales_count }}</h5>
+                                                    <small class="text-muted">Bills Today</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h5 class="text-warning">{{ monthly_sales_count }}</h5>
+                                                <small class="text-muted">Bills This Month</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -295,222 +408,328 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Bootstrap version:', typeof bootstrap !== 'undefined' ? 'loaded' : 'not loaded');
 });
 
-// Enhanced product details and billing functionality
+// Multi-Product Billing System
 document.addEventListener('DOMContentLoaded', function() {
-    const productInput = document.querySelector('input[name="product"]');
-    const quantityInput = document.querySelector('input[name="quantity"]');
-    const submitButton = document.querySelector('button[type="submit"]');
-    
+    // Multi-product billing variables
+    let selectedProducts = [];
     let currentProductData = null;
     
-    if (productInput) {
-        productInput.addEventListener('change', function() {
-            const productName = this.value.trim();
-            
-            if (productName) {
-                // Show loading state
-                showProductDetails(true);
-                document.getElementById('product-name').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
-                
-                // Find product by name and fetch details with exact inventory quantities
-                fetch(`/api/search-products-billing/?q=${encodeURIComponent(productName)}`)
-                    .then(response => response.json())
-                    .then(searchData => {
-                        const exactMatch = searchData.products.find(p => 
-                            p.name.toLowerCase() === productName.toLowerCase()
-                        );
-                        
-                        if (exactMatch) {
-                            // Fetch detailed product information with exact inventory quantities
-                            return fetch(`/product-details/${exactMatch.id}/`);
-                        } else {
-                            throw new Error('Product not found');
-                        }
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        currentProductData = data;
-                        updateProductDetails(data);
-                        updateQuantityValidation(data.max_sellable_quantity || data.total_stock);
-                        updateTotal();
-                        
-                        // Show inventory message
-                        if (data.inventory_message) {
-                            showInventoryInfo(data.inventory_message);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching product details:', error);
-                        showError('Product not found or failed to load details. Please select from the dropdown.');
-                        hideProductDetails();
-                        currentProductData = null;
-                    });
+    // DOM elements
+    const productSearch = document.getElementById('product-search');
+    const productQuantity = document.getElementById('product-quantity');
+    const productPrice = document.getElementById('product-price');
+    const addProductBtn = document.getElementById('add-product-btn');
+    const selectedProductsBody = document.getElementById('selected-products-body');
+    const noProductsRow = document.getElementById('no-products-row');
+    const billSummary = document.getElementById('bill-summary');
+    const totalItems = document.getElementById('total-items');
+    const grandTotal = document.getElementById('grand-total');
+    const createBillBtn = document.getElementById('create-bill-btn');
+    const productsDataInput = document.getElementById('products-data');
+    const availableStockInfo = document.getElementById('available-stock-info');
+    
+    // Product search functionality
+    if (productSearch) {
+        productSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            if (query.length >= 2) {
+                searchProducts(query);
             } else {
-                hideProductDetails();
-                currentProductData = null;
+                clearProductSelection();
+            }
+        });
+        
+        productSearch.addEventListener('change', function() {
+            const productName = this.value.trim();
+            if (productName) {
+                selectProduct(productName);
             }
         });
     }
     
-    if (quantityInput) {
-        quantityInput.addEventListener('input', function() {
-            updateTotal();
+    // Quantity input functionality
+    if (productQuantity) {
+        productQuantity.addEventListener('input', function() {
             validateQuantity();
+            updateAddButton();
         });
-        
-        quantityInput.addEventListener('blur', validateQuantity);
     }
     
-    function updateProductDetails(data) {
-        document.getElementById('product-name').textContent = data.name;
-        document.getElementById('product-category').textContent = data.category;
-        document.getElementById('unit-price').textContent = `₹${parseFloat(data.current_price).toFixed(2)}`;
-        
-        // Update stock with color coding
-        const stockElement = document.getElementById('available-stock');
-        const stockCount = data.total_stock;
-        let stockClass = 'text-success';
-        let stockIcon = 'fas fa-check-circle';
-        
-        if (stockCount === 0) {
-            stockClass = 'text-danger';
-            stockIcon = 'fas fa-times-circle';
-        } else if (stockCount < 10) {
-            stockClass = 'text-warning';
-            stockIcon = 'fas fa-exclamation-triangle';
+    // Add product button
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', function() {
+            addProductToBill();
+        });
+    }
+    
+    // Multi-product form submission
+    const multiProductForm = document.getElementById('multi-product-form');
+    if (multiProductForm) {
+        multiProductForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            createMultiProductBill();
+        });
+    }
+    
+    function searchProducts(query) {
+        fetch(`/api/search-products-billing/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Search results:', data.products);
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+            });
+    }
+    
+    function selectProduct(productName) {
+        fetch(`/api/search-products-billing/?q=${encodeURIComponent(productName)}`)
+            .then(response => response.json())
+            .then(searchData => {
+                const exactMatch = searchData.products.find(p => 
+                    p.name.toLowerCase() === productName.toLowerCase()
+                );
+                
+                if (exactMatch) {
+                    return fetch(`/product-details/${exactMatch.id}/`);
+                } else {
+                    throw new Error('Product not found');
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                currentProductData = data;
+                updateProductFields(data);
+                validateQuantity();
+                updateAddButton();
+            })
+            .catch(error => {
+                console.error('Error fetching product details:', error);
+                clearProductSelection();
+                showError('Product not found. Please select from available products.');
+            });
+    }
+    
+    function updateProductFields(data) {
+        if (productPrice) {
+            productPrice.value = `₹${parseFloat(data.current_price).toFixed(2)}`;
         }
         
-        stockElement.innerHTML = `<i class="${stockIcon} me-1"></i><span class="${stockClass}">${stockCount} units</span>`;
-        
-        // Update ABC classification
-        const abcElement = document.getElementById('abc-class');
-        const abcClass = data.calculated_abc_classification;
-        let badgeClass = 'bg-secondary';
-        
-        if (abcClass === 'A') badgeClass = 'bg-danger';
-        else if (abcClass === 'B') badgeClass = 'bg-warning';
-        else if (abcClass === 'C') badgeClass = 'bg-secondary';
-        
-        abcElement.innerHTML = `<span class="badge ${badgeClass}">${abcClass} - ${abcClass === 'A' ? 'High Value' : abcClass === 'B' ? 'Medium Value' : 'Low Value'}</span>`;
-        
-        // Update trend score
-        const trendElement = document.getElementById('trend-score');
-        const trendScore = parseFloat(data.trend_score || 0);
-        let trendClass = 'bg-info';
-        
-        if (trendScore >= 7) trendClass = 'bg-success';
-        else if (trendScore >= 4) trendClass = 'bg-warning';
-        else trendClass = 'bg-danger';
-        
-        trendElement.innerHTML = `<span class="badge ${trendClass}">${trendScore.toFixed(1)}/10</span>`;
-        
-        // Update max quantity helper with exact inventory quantity
-        document.getElementById('max-quantity').textContent = stockCount;
-    }
-    
-    function updateQuantityValidation(maxStock) {
-        if (quantityInput) {
-            quantityInput.setAttribute('max', maxStock);
-            quantityInput.setAttribute('min', '1');
+        if (availableStockInfo) {
+            const stockCount = data.max_sellable_quantity || data.total_stock;
+            let stockClass = 'text-success';
             
-            // Update placeholder to show exact available quantity
-            quantityInput.setAttribute('placeholder', `Max: ${maxStock} units available`);
+            if (stockCount === 0) {
+                stockClass = 'text-danger';
+            } else if (stockCount < 10) {
+                stockClass = 'text-warning';
+            }
+            
+            availableStockInfo.innerHTML = `<span class="${stockClass}">${stockCount} units available</span>`;
+        }
+        
+        if (productQuantity) {
+            productQuantity.setAttribute('max', data.max_sellable_quantity || data.total_stock);
+            productQuantity.setAttribute('min', '1');
         }
     }
     
     function validateQuantity() {
-        if (!currentProductData || !quantityInput.value) return;
+        if (!currentProductData || !productQuantity.value) return false;
         
-        const quantity = parseInt(quantityInput.value) || 0;
-        const maxStock = currentProductData.total_stock;
-        const warningDiv = document.getElementById('stock-warning');
-        const warningMessage = document.getElementById('warning-message');
+        const quantity = parseInt(productQuantity.value) || 0;
+        const maxStock = currentProductData.max_sellable_quantity || currentProductData.total_stock;
         
-        if (quantity > maxStock) {
-            warningDiv.style.display = 'block';
-            warningMessage.textContent = `Requested quantity (${quantity}) exceeds available stock (${maxStock} units).`;
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Insufficient Stock';
-        } else if (quantity <= 0) {
-            warningDiv.style.display = 'block';
-            warningMessage.textContent = 'Please enter a valid quantity (minimum 1 unit).';
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Invalid Quantity';
-        } else {
-            warningDiv.style.display = 'none';
-            submitButton.disabled = false;
-            submitButton.innerHTML = '<i class="fas fa-shopping-cart me-1"></i>Process Sale';
+        return quantity > 0 && quantity <= maxStock;
+    }
+    
+    function updateAddButton() {
+        if (addProductBtn) {
+            const isValid = currentProductData && validateQuantity() && productSearch.value.trim();
+            addProductBtn.disabled = !isValid;
         }
     }
     
-    function updateTotal() {
-        if (!currentProductData || !quantityInput.value) {
-            hideAmountPreview();
+    function addProductToBill() {
+        if (!currentProductData || !validateQuantity()) {
+            showError('Please select a valid product and quantity.');
             return;
         }
         
-        const quantity = parseInt(quantityInput.value) || 0;
-        const unitPrice = parseFloat(currentProductData.current_price) || 0;
+        const productName = currentProductData.name;
+        const quantity = parseInt(productQuantity.value);
+        const unitPrice = parseFloat(currentProductData.current_price);
         const total = quantity * unitPrice;
         
-        if (quantity > 0 && unitPrice > 0) {
-            showAmountPreview();
-            document.getElementById('total-amount').textContent = `₹${total.toFixed(2)}`;
-            document.getElementById('calculation-details').textContent = `${quantity} × ₹${unitPrice.toFixed(2)}`;
+        // Check if product already exists in the bill
+        const existingProductIndex = selectedProducts.findIndex(p => p.name === productName);
+        
+        if (existingProductIndex !== -1) {
+            // Update existing product quantity
+            const existingProduct = selectedProducts[existingProductIndex];
+            const newQuantity = existingProduct.quantity + quantity;
+            const maxStock = currentProductData.max_sellable_quantity || currentProductData.total_stock;
+            
+            if (newQuantity > maxStock) {
+                showError(`Cannot add ${quantity} more units. Maximum available: ${maxStock - existingProduct.quantity}`);
+                return;
+            }
+            
+            selectedProducts[existingProductIndex].quantity = newQuantity;
+            selectedProducts[existingProductIndex].total = newQuantity * unitPrice;
         } else {
-            hideAmountPreview();
+            // Add new product
+            selectedProducts.push({
+                id: currentProductData.id || Date.now(),
+                name: productName,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                total: total
+            });
+        }
+        
+        updateSelectedProductsTable();
+        updateBillSummary();
+        clearProductInputs();
+        
+        showSuccess(`Added ${quantity} units of ${productName} to bill`);
+    }
+    
+    function updateSelectedProductsTable() {
+        if (selectedProducts.length === 0) {
+            selectedProductsBody.innerHTML = `
+                <tr id="no-products-row">
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <br>No products added yet
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let tableHTML = '';
+        selectedProducts.forEach((product, index) => {
+            tableHTML += `
+                <tr>
+                    <td><strong>${product.name}</strong></td>
+                    <td>${product.quantity}</td>
+                    <td>₹${product.unitPrice.toFixed(2)}</td>
+                    <td><strong>₹${product.total.toFixed(2)}</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="removeProduct(${index})" title="Remove Product">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        selectedProductsBody.innerHTML = tableHTML;
+    }
+    
+    function updateBillSummary() {
+        const totalItemsCount = selectedProducts.reduce((sum, product) => sum + product.quantity, 0);
+        const grandTotalAmount = selectedProducts.reduce((sum, product) => sum + product.total, 0);
+        
+        if (totalItems) totalItems.textContent = totalItemsCount;
+        if (grandTotal) grandTotal.textContent = `₹${grandTotalAmount.toFixed(2)}`;
+        
+        // Show/hide bill summary
+        if (billSummary) {
+            billSummary.style.display = selectedProducts.length > 0 ? 'block' : 'none';
+        }
+        
+        // Enable/disable create bill button
+        if (createBillBtn) {
+            createBillBtn.disabled = selectedProducts.length === 0;
+        }
+        
+        // Update hidden input with products data
+        if (productsDataInput) {
+            productsDataInput.value = JSON.stringify(selectedProducts);
         }
     }
     
-    function showProductDetails(loading = false) {
-        document.getElementById('product-details').style.display = 'block';
+    function clearProductInputs() {
+        if (productSearch) productSearch.value = '';
+        if (productQuantity) productQuantity.value = '';
+        if (productPrice) productPrice.value = '';
+        if (availableStockInfo) availableStockInfo.textContent = 'Select a product';
+        
+        currentProductData = null;
+        updateAddButton();
     }
     
-    function hideProductDetails() {
-        document.getElementById('product-details').style.display = 'none';
-        hideAmountPreview();
-        document.getElementById('stock-warning').style.display = 'none';
+    function clearProductSelection() {
+        currentProductData = null;
+        if (productPrice) productPrice.value = '';
+        if (availableStockInfo) availableStockInfo.textContent = 'Select a product';
+        updateAddButton();
     }
     
-    function showAmountPreview() {
-        document.getElementById('amount-preview').style.display = 'block';
+    function createMultiProductBill() {
+        if (selectedProducts.length === 0) {
+            showError('Please add at least one product to create a bill.');
+            return;
+        }
+        
+        // Show loading state
+        createBillBtn.disabled = true;
+        createBillBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating Bill...';
+        
+        // Submit the form
+        document.getElementById('multi-product-form').submit();
     }
     
-    function hideAmountPreview() {
-        document.getElementById('amount-preview').style.display = 'none';
+    // Global function to remove product (called from table buttons)
+    window.removeProduct = function(index) {
+        if (confirm('Are you sure you want to remove this product from the bill?')) {
+            selectedProducts.splice(index, 1);
+            updateSelectedProductsTable();
+            updateBillSummary();
+            showSuccess('Product removed from bill');
+        }
+    };
+    
+    function showSuccess(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.insertBefore(alert, container.firstChild);
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 3000);
+        }
     }
     
     function showError(message) {
-        // You can implement a toast notification here
-        alert(message);
-    }
-    
-    function showInventoryInfo(message) {
-        // Show inventory information message
-        const infoDiv = document.createElement('div');
-        infoDiv.className = 'alert alert-info mt-2';
-        infoDiv.innerHTML = `<i class="fas fa-info-circle me-2"></i>${message}`;
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
         
-        // Remove any existing info messages
-        const existingInfo = document.querySelector('.alert-info');
-        if (existingInfo) {
-            existingInfo.remove();
-        }
-        
-        // Add after product details
-        const productDetails = document.getElementById('product-details');
-        if (productDetails) {
-            productDetails.insertAdjacentElement('afterend', infoDiv);
-            
-            // Auto-remove after 5 seconds
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.insertBefore(alert, container.firstChild);
             setTimeout(() => {
-                if (infoDiv.parentNode) {
-                    infoDiv.remove();
+                if (alert.parentNode) {
+                    alert.remove();
                 }
             }, 5000);
         }
     }
-}); // Close DOMContentLoaded event listener
+});
 
 function viewBillDetails(billId) {
     console.log('Viewing bill details for ID:', billId);
@@ -674,3 +893,115 @@ function printBill(billNumber) {
 }
 </script>
 {% endblock %}
+
+<style>
+/* Modern Tab Styling */
+.nav-tabs .nav-link {
+    border: none;
+    border-radius: 0;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    border-bottom: 2px solid #0d6efd;
+}
+
+/* Card Hover Effects */
+.card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Button Styling */
+.btn {
+    transition: all 0.2s ease;
+}
+
+.btn:hover {
+    transform: scale(1.02);
+}
+
+/* Table Styling */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Form Styling */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Stats Cards */
+.card.border-primary:hover {
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.2);
+}
+
+.card.border-success:hover {
+    box-shadow: 0 6px 20px rgba(25, 135, 84, 0.2);
+}
+
+.card.border-info:hover {
+    box-shadow: 0 6px 20px rgba(13, 202, 240, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .nav-tabs .nav-link {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-sm {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Loading States */
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Empty State Styling */
+.text-center.py-4 {
+    color: #6c757d;
+}
+
+.text-center.py-4 i {
+    opacity: 0.5;
+}
+</style>

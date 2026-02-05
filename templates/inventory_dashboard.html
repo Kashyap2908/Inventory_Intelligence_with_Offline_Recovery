@@ -14,16 +14,60 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
-                            <i class="fas fa-warehouse me-1"></i>Inventory
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'billing' %}">
-                            <i class="fas fa-receipt me-1"></i>Billing
-                        </a>
-                    </li>
+                    {% if user.userprofile.role == 'inventory' %}
+                        <!-- Inventory users: Inventory + Billing -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'admin' %}
+                        <!-- Admin users: Inventory + Trends + Billing + Admin -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'marketing' %}
+                        <!-- Marketing users: Only Trends -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                    {% else %}
+                        <!-- Fallback: Show inventory + billing -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item dropdown me-3">
@@ -54,309 +98,379 @@
 {% endblock %}
 
 {% block content %}
-<!-- Header -->
+<!-- Header with Quick Stats -->
 <div class="row mb-4">
     <div class="col-12">
-        <div>
-            <h2 class="mb-1">Inventory Management</h2>
-            <p class="text-muted mb-0">Manage products and stock entries</p>
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">Inventory Management</h2>
+                <p class="text-muted mb-0">Manage products and stock entries</p>
+            </div>
         </div>
     </div>
 </div>
 
-<!-- Notifications Panel - Always Visible -->
-<div class="row mb-4" id="notifications-panel">
+<!-- Main Dashboard Tabs -->
+<div class="row">
     <div class="col-12">
-        <div class="card shadow-lg border-primary">
-            <div class="card-header bg-primary text-white">
-                <h5 class="mb-0">
-                    <i class="fas fa-bell me-2"></i>Notifications
-                    {% if total_notifications > 0 %}
-                        <span class="badge bg-light text-primary ms-2">{{ total_notifications }} New</span>
-                    {% endif %}
-                    {% if read_notifications %}
-                        <span class="badge bg-secondary ms-2">{{ read_notifications|length }} Read</span>
-                    {% endif %}
-                </h5>
-            </div>
-            <div class="card-body">
-                <!-- Tabs for New and History -->
-                <ul class="nav nav-tabs mb-3" id="notificationTabs" role="tablist">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <ul class="nav nav-tabs card-header-tabs" id="mainTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="new-tab" data-bs-toggle="tab" data-bs-target="#new-notifications" type="button" role="tab">
-                            <i class="fas fa-bell me-1"></i>New Notifications ({{ total_notifications }})
+                        <button class="nav-link active" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications-panel" type="button" role="tab">
+                            <i class="fas fa-bell me-2"></i>Notifications
+                            {% if total_notifications > 0 %}
+                                <span class="badge bg-danger ms-1">{{ total_notifications }}</span>
+                            {% endif %}
                         </button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#notification-history" type="button" role="tab">
-                            <i class="fas fa-history me-1"></i>History ({{ read_notifications|length }})
+                        <button class="nav-link" id="forms-tab" data-bs-toggle="tab" data-bs-target="#forms-panel" type="button" role="tab">
+                            <i class="fas fa-plus me-2"></i>Add Items
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="products-tab" data-bs-toggle="tab" data-bs-target="#products-panel" type="button" role="tab">
+                            <i class="fas fa-list me-2"></i>Products Overview
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-panel" type="button" role="tab">
+                            <i class="fas fa-history me-2"></i>Recent Activity
                         </button>
                     </li>
                 </ul>
-                
-                <div class="tab-content" id="notificationTabContent">
-                    <!-- New Notifications Tab -->
-                    <div class="tab-pane fade show active" id="new-notifications" role="tabpanel">
-                        {% if notifications %}
-                            {% for notification in notifications %}
-                            <div class="notification-item priority-{{ notification.priority }} mb-3 p-3 border rounded 
-                                 {% if notification.priority == 'urgent' %}border-danger bg-danger-subtle
-                                 {% elif notification.priority == 'high' %}border-warning bg-warning-subtle
-                                 {% elif notification.priority == 'medium' %}border-info bg-info-subtle
-                                 {% else %}border-secondary bg-light{% endif %}" data-notification-id="{{ notification.id }}">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1 
-                                            {% if notification.priority == 'urgent' %}text-danger
-                                            {% elif notification.priority == 'high' %}text-warning
-                                            {% elif notification.priority == 'medium' %}text-info
-                                            {% else %}text-primary{% endif %}">
-                                            {% if notification.priority == 'urgent' %}
-                                                <i class="fas fa-fire me-1"></i>
-                                            {% elif notification.priority == 'high' %}
-                                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                            {% elif notification.priority == 'medium' %}
-                                                <i class="fas fa-info-circle me-1"></i>
-                                            {% else %}
-                                                <i class="fas fa-bell me-1"></i>
-                                            {% endif %}
-                                            {{ notification.title }}
-                                            <span class="badge ms-2 
-                                                {% if notification.priority == 'urgent' %}bg-danger
-                                                {% elif notification.priority == 'high' %}bg-warning text-dark
-                                                {% elif notification.priority == 'medium' %}bg-info
-                                                {% else %}bg-secondary{% endif %}">
-                                                {{ notification.priority|upper }}
-                                            </span>
-                                        </h6>
-                                        <p class="mb-2 text-muted">{{ notification.message|linebreaks }}</p>
-                                        {% if notification.product %}
-                                        <div class="small text-info">
-                                            <i class="fas fa-box me-1"></i>{{ notification.product.name }}
-                                            <span class="ms-2 text-muted">Stock: {{ notification.product.total_stock }} units</span>
-                                        </div>
-                                        {% endif %}
-                                        <div class="small text-muted mt-2">
-                                            <i class="fas fa-clock me-1"></i>Sent: <span class="notification-time" data-created-time="{{ notification.created_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, Y H:i" }}{% endtimezone %}</span>
-                                        </div>
-                                    </div>
-                                    <div class="text-end">
-                                        <button class="btn btn-sm btn-success mark-read-btn" data-notification-id="{{ notification.id }}" title="Mark as read">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="text-center py-4">
-                                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">No new notifications</h5>
-                                <p class="text-muted">You're all caught up!</p>
-                            </div>
-                        {% endif %}
-                    </div>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="mainTabContent">
                     
-                    <!-- Notification History Tab -->
-                    <div class="tab-pane fade" id="notification-history" role="tabpanel">
-                        {% if read_notifications %}
-                            {% for notification in read_notifications %}
-                            <div class="notification-item-read mb-3 p-3 border rounded 
-                                 {% if notification.priority == 'urgent' %}border-danger bg-danger-subtle
-                                 {% elif notification.priority == 'high' %}border-warning bg-warning-subtle
-                                 {% elif notification.priority == 'medium' %}border-info bg-info-subtle
-                                 {% else %}border-secondary bg-light{% endif %}">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <h6 class="mb-1 text-muted">
-                                            <i class="fas fa-check-circle text-success me-1"></i>
-                                            {{ notification.title }}
-                                            <span class="badge ms-2 
-                                                {% if notification.priority == 'urgent' %}bg-danger
-                                                {% elif notification.priority == 'high' %}bg-warning text-dark
-                                                {% elif notification.priority == 'medium' %}bg-info
-                                                {% else %}bg-secondary{% endif %}">
-                                                {{ notification.priority|upper }}
-                                            </span>
-                                        </h6>
-                                        <p class="mb-2 text-muted small">{{ notification.message|linebreaks }}</p>
-                                        {% if notification.product %}
-                                        <div class="small text-info">
-                                            <i class="fas fa-box me-1"></i>{{ notification.product.name }}
-                                        </div>
+                    <!-- Notifications Panel -->
+                    <div class="tab-pane fade show active" id="notifications-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12">
+                                <!-- Sub-tabs for notifications -->
+                                <ul class="nav nav-pills mb-3" id="notificationTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="new-notifications-tab" data-bs-toggle="pill" data-bs-target="#new-notifications" type="button" role="tab">
+                                            <i class="fas fa-bell me-1"></i>New ({{ total_notifications }})
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="read-notifications-tab" data-bs-toggle="pill" data-bs-target="#read-notifications" type="button" role="tab">
+                                            <i class="fas fa-check-circle me-1"></i>Read ({{ read_notifications|length }})
+                                        </button>
+                                    </li>
+                                </ul>
+                                
+                                <div class="tab-content" id="notificationTabContent">
+                                    <!-- New Notifications -->
+                                    <div class="tab-pane fade show active" id="new-notifications" role="tabpanel">
+                                        {% if notifications %}
+                                            <div class="row">
+                                                {% for notification in notifications %}
+                                                <div class="col-lg-6 mb-3">
+                                                    <div class="card h-100 border-start border-4 
+                                                         {% if notification.notification_type == 'admin_message' %}border-primary bg-light
+                                                         {% elif notification.priority == 'urgent' %}border-danger
+                                                         {% elif notification.priority == 'high' %}border-warning
+                                                         {% elif notification.priority == 'medium' %}border-info
+                                                         {% else %}border-secondary{% endif %}" data-notification-id="{{ notification.id }}">
+                                                        <div class="card-body p-3">
+                                                            {% if notification.notification_type == 'admin_message' %}
+                                                            <div class="d-flex align-items-center mb-2">
+                                                                <div class="badge bg-primary me-2">
+                                                                    <i class="fas fa-user-shield me-1"></i>ADMIN MESSAGE
+                                                                </div>
+                                                                <span class="badge bg-{{ notification.priority }}">{{ notification.priority|upper }}</span>
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                                <h6 class="card-title mb-0 
+                                                                    {% if notification.notification_type == 'admin_message' %}text-primary fw-bold
+                                                                    {% elif notification.priority == 'urgent' %}text-danger
+                                                                    {% elif notification.priority == 'high' %}text-warning
+                                                                    {% elif notification.priority == 'medium' %}text-info
+                                                                    {% else %}text-primary{% endif %}">
+                                                                    {% if notification.notification_type == 'admin_message' %}
+                                                                        <i class="fas fa-envelope me-1"></i>
+                                                                    {% elif notification.priority == 'urgent' %}
+                                                                        <i class="fas fa-fire me-1"></i>
+                                                                    {% elif notification.priority == 'high' %}
+                                                                        <i class="fas fa-exclamation-triangle me-1"></i>
+                                                                    {% elif notification.priority == 'medium' %}
+                                                                        <i class="fas fa-info-circle me-1"></i>
+                                                                    {% else %}
+                                                                        <i class="fas fa-bell me-1"></i>
+                                                                    {% endif %}
+                                                                    {{ notification.title }}
+                                                                </h6>
+                                                                {% if notification.notification_type != 'admin_message' %}
+                                                                <span class="badge 
+                                                                    {% if notification.priority == 'urgent' %}bg-danger
+                                                                    {% elif notification.priority == 'high' %}bg-warning text-dark
+                                                                    {% elif notification.priority == 'medium' %}bg-info
+                                                                    {% else %}bg-secondary{% endif %}">
+                                                                    {{ notification.priority|upper }}
+                                                                </span>
+                                                                {% endif %}
+                                                            </div>
+                                                            <p class="card-text small text-muted mb-2">{{ notification.message|truncatewords:15 }}</p>
+                                                            {% if notification.product %}
+                                                            <div class="small text-info mb-2">
+                                                                <i class="fas fa-box me-1"></i>{{ notification.product.name }}
+                                                                <span class="ms-2 text-muted">Stock: {{ notification.product.total_stock }} units</span>
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="small text-muted mb-3">
+                                                                <i class="fas fa-clock me-1"></i>{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, H:i" }}{% endtimezone %}
+                                                            </div>
+                                                            <div class="d-flex gap-1 flex-wrap">
+                                                                {% if notification.notification_type == 'admin_message' %}
+                                                                    <button class="btn btn-sm btn-primary" onclick="showFullMessage('{{ notification.id }}')" title="View Full Message">
+                                                                        <i class="fas fa-eye me-1"></i>View Details
+                                                                    </button>
+                                                                    <button class="btn btn-sm btn-success mark-read-btn" data-notification-id="{{ notification.id }}" title="Mark as read">
+                                                                        <i class="fas fa-check me-1"></i>Acknowledge
+                                                                    </button>
+                                                                {% elif notification.notification_type == 'order_request' %}
+                                                                    <button class="btn btn-sm btn-warning receive-order-btn" 
+                                                                            data-notification-id="{{ notification.id }}" 
+                                                                            title="Acknowledge Order Request">
+                                                                        <i class="fas fa-handshake"></i> Receive
+                                                                    </button>
+                                                                    <button class="btn btn-sm btn-info update-order-btn" 
+                                                                            data-notification-id="{{ notification.id }}"
+                                                                            data-product-name="{{ notification.product.name }}"
+                                                                            title="Mark as Ordered">
+                                                                        <i class="fas fa-truck"></i> Ordered
+                                                                    </button>
+                                                                {% else %}
+                                                                    <button class="btn btn-sm btn-success mark-read-btn" data-notification-id="{{ notification.id }}" title="Mark as read">
+                                                                        <i class="fas fa-check"></i> Read
+                                                                    </button>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-center py-5">
+                                                <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                                                <h5 class="text-muted">No new notifications</h5>
+                                                <p class="text-muted">You're all caught up!</p>
+                                            </div>
                                         {% endif %}
-                                        <div class="small text-muted mt-2">
-                                            <i class="fas fa-clock me-1"></i>Sent: <span class="notification-received-time" data-created-time="{{ notification.created_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.created_at|date:"M d, Y H:i" }}{% endtimezone %}</span>
-                                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: <span class="notification-read-time" data-read-time="{{ notification.safe_updated_at|date:'c' }}">{% timezone "Asia/Kolkata" %}{{ notification.safe_updated_at|date:"M d, Y H:i" }}{% endtimezone %}</span></span>
-                                        </div>
                                     </div>
-                                    <div class="text-end">
-                                        <span class="badge bg-success">Read</span>
+                                    
+                                    <!-- Read Notifications -->
+                                    <div class="tab-pane fade" id="read-notifications" role="tabpanel">
+                                        {% if read_notifications %}
+                                            <div class="row">
+                                                {% for notification in read_notifications %}
+                                                <div class="col-lg-6 mb-3">
+                                                    <div class="card h-100 border-start border-4 border-success opacity-75">
+                                                        <div class="card-body p-3">
+                                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                                <h6 class="card-title mb-0 text-muted">
+                                                                    <i class="fas fa-check-circle text-success me-1"></i>
+                                                                    {{ notification.title }}
+                                                                </h6>
+                                                                <span class="badge bg-success">READ</span>
+                                                            </div>
+                                                            <p class="card-text small text-muted mb-2">{{ notification.message|truncatewords:15 }}</p>
+                                                            {% if notification.product %}
+                                                            <div class="small text-info mb-2">
+                                                                <i class="fas fa-box me-1"></i>{{ notification.product.name }}
+                                                            </div>
+                                                            {% endif %}
+                                                            <div class="small text-muted">
+                                                                <i class="fas fa-clock me-1"></i>Read: {% timezone "Asia/Kolkata" %}{{ notification.safe_updated_at|date:"M d, H:i" }}{% endtimezone %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-center py-5">
+                                                <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                                                <h5 class="text-muted">No notification history</h5>
+                                                <p class="text-muted">Read notifications will appear here</p>
+                                            </div>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
-                            {% endfor %}
-                        {% else %}
-                            <div class="text-center py-4">
-                                <i class="fas fa-history fa-3x text-muted mb-3"></i>
-                                <h5 class="text-muted">No notification history</h5>
-                                <p class="text-muted">Read notifications will appear here</p>
+                        </div>
+                    </div>
+
+                    <!-- Forms Panel -->
+                    <div class="tab-pane fade" id="forms-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-lg-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Add New Product</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post">
+                                            {% csrf_token %}
+                                            <div class="mb-3">
+                                                {{ product_form.name.label_tag }}
+                                                {{ product_form.name }}
+                                            </div>
+                                            <div class="mb-3">
+                                                {{ product_form.category.label_tag }}
+                                                {{ product_form.category }}
+                                            </div>
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    {{ product_form.cost_price.label_tag }}
+                                                    {{ product_form.cost_price }}
+                                                </div>
+                                                <div class="col-md-6 mb-3">
+                                                    {{ product_form.selling_price.label_tag }}
+                                                    {{ product_form.selling_price }}
+                                                </div>
+                                            </div>
+                                            <button type="submit" name="add_product" class="btn btn-primary w-100">
+                                                <i class="fas fa-plus me-1"></i>Add Product
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
                             </div>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Forms Row -->
-<div class="row mb-4">
-    <div class="col-lg-6 mb-3">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Add Product</h5>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        {{ product_form.name.label_tag }}
-                        {{ product_form.name }}
-                    </div>
-                    <div class="mb-3">
-                        {{ product_form.category.label_tag }}
-                        {{ product_form.category }}
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            {{ product_form.cost_price.label_tag }}
-                            {{ product_form.cost_price }}
+                            <div class="col-lg-6 mb-4">
+                                <div class="card h-100">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Add Stock</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post" id="stockForm">
+                                            {% csrf_token %}
+                                            <div class="mb-3">
+                                                {{ stock_form.product.label_tag }}
+                                                {{ stock_form.product }}
+                                                <div id="productInfo" class="mt-2" style="display: none;">
+                                                    <div class="alert alert-info mb-2">
+                                                        <div class="row">
+                                                            <div class="col-md-6">
+                                                                <strong><i class="fas fa-warehouse me-1"></i>Current Stock:</strong>
+                                                                <span id="currentStock" class="badge bg-primary ms-1">0 units</span>
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <strong><i class="fas fa-shopping-cart me-1"></i>Pending Orders:</strong>
+                                                                <span id="pendingOrders" class="badge bg-warning ms-1">0 orders</span>
+                                                            </div>
+                                                        </div>
+                                                        <div id="orderDetails" class="mt-2" style="display: none;">
+                                                            <small class="text-muted">
+                                                                <i class="fas fa-info-circle me-1"></i>
+                                                                <strong>Note:</strong> Adding stock will notify the admin who placed the order.
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                {{ stock_form.quantity.label_tag }}
+                                                {{ stock_form.quantity }}
+                                            </div>
+                                            <div class="mb-3">
+                                                {{ stock_form.expiry_date.label_tag }}
+                                                {{ stock_form.expiry_date }}
+                                            </div>
+                                            <button type="submit" name="add_stock" class="btn btn-success w-100">
+                                                <i class="fas fa-plus me-1"></i>Add Stock
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            {{ product_form.selling_price.label_tag }}
-                            {{ product_form.selling_price }}
+                    </div>
+
+                    <!-- Products Panel -->
+                    <div class="tab-pane fade" id="products-panel" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="products-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-box me-1"></i>Product</th>
+                                        <th><i class="fas fa-tag me-1"></i>Category</th>
+                                        <th><i class="fas fa-rupee-sign me-1"></i>Cost Price</th>
+                                        <th><i class="fas fa-rupee-sign me-1"></i>Selling Price</th>
+                                        <th><i class="fas fa-rupee-sign me-1"></i>Current Price</th>
+                                        <th><i class="fas fa-chart-bar me-1"></i>Class</th>
+                                        <th><i class="fas fa-warehouse me-1"></i>Stock</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for product in products %}
+                                    <tr data-product-id="{{ product.id }}">
+                                        <td><strong>{{ product.name }}</strong></td>
+                                        <td><span class="badge bg-light text-dark">{{ product.category }}</span></td>
+                                        <td>₹{{ product.cost_price }}</td>
+                                        <td>₹{{ product.selling_price }}</td>
+                                        <td><strong class="text-success">₹{{ product.new_price }}</strong></td>
+                                        <td>
+                                            <span class="badge bg-{% if product.calculated_abc_classification == 'A' %}danger{% elif product.calculated_abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
+                                                {{ product.calculated_abc_classification }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if product.total_stock < 10 %}bg-danger{% elif product.total_stock < 50 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                                {{ product.total_stock }} units
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="7" class="text-center text-muted py-4">
+                                            <i class="fas fa-box-open fa-2x mb-2"></i>
+                                            <br>No products available
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                    <button type="submit" name="add_product" class="btn btn-primary">
-                        <i class="fas fa-plus me-1"></i>Add Product
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-lg-6 mb-3">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Add Stock</h5>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        {{ stock_form.product.label_tag }}
-                        {{ stock_form.product }}
-                    </div>
-                    <div class="mb-3">
-                        {{ stock_form.quantity.label_tag }}
-                        {{ stock_form.quantity }}
-                    </div>
-                    <div class="mb-3">
-                        {{ stock_form.expiry_date.label_tag }}
-                        {{ stock_form.expiry_date }}
-                    </div>
-                    <button type="submit" name="add_stock" class="btn btn-success">
-                        <i class="fas fa-plus me-1"></i>Add Stock
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
 
-<!-- Products Table -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Products Overview</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table" id="products-table">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Category</th>
-                                <th>Cost Price</th>
-                                <th>Selling Price</th>
-                                <th>Current Price</th>
-                                <th>Class</th>
-                                <th>Stock</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for product in products %}
-                            <tr data-product-id="{{ product.id }}">
-                                <td><strong>{{ product.name }}</strong></td>
-                                <td>{{ product.category }}</td>
-                                <td>₹{{ product.cost_price }}</td>
-                                <td>₹{{ product.selling_price }}</td>
-                                <td><strong>₹{{ product.new_price }}</strong></td>
-                                <td>
-                                    <span class="badge bg-{% if product.calculated_abc_classification == 'A' %}danger{% elif product.calculated_abc_classification == 'B' %}warning{% else %}secondary{% endif %}">
-                                        {{ product.calculated_abc_classification }}
-                                    </span>
-                                </td>
-                                <td>{{ product.total_stock }}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="7" class="text-center text-muted">No products available</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Stock Entries -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Stock Entries</h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Product</th>
-                                <th>Quantity</th>
-                                <th>Expiry Date</th>
-                                <th>Added On</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for stock in recent_stock %}
-                            <tr>
-                                <td>{{ stock.product.name }}</td>
-                                <td>{{ stock.quantity }} units</td>
-                                <td>{{ stock.expiry_date }}</td>
-                                <td>{% timezone "Asia/Kolkata" %}{{ stock.created_at|date:"M d, Y" }}{% endtimezone %}</td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No recent stock entries</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    <!-- History Panel -->
+                    <div class="tab-pane fade" id="history-panel" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-box me-1"></i>Product</th>
+                                        <th><i class="fas fa-sort-numeric-up me-1"></i>Quantity</th>
+                                        <th><i class="fas fa-calendar-alt me-1"></i>Expiry Date</th>
+                                        <th><i class="fas fa-clock me-1"></i>Added On</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for stock in recent_stock %}
+                                    <tr>
+                                        <td><strong>{{ stock.product.name }}</strong></td>
+                                        <td><span class="badge bg-info">{{ stock.quantity }} units</span></td>
+                                        <td>{{ stock.expiry_date }}</td>
+                                        <td>{% timezone "Asia/Kolkata" %}{{ stock.created_at|date:"M d, Y H:i" }}{% endtimezone %}</td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-4">
+                                            <i class="fas fa-history fa-2x mb-2"></i>
+                                            <br>No recent stock entries
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -470,28 +584,29 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (data.success) {
                         console.log('✅ Success! Moving notification to history...');
                         
-                        // Find the notification item
-                        const notificationItem = this.closest('.notification-item');
-                        if (notificationItem) {
+                        // Find the notification card
+                        const notificationCard = this.closest('.col-lg-6');
+                        if (notificationCard) {
                             // Get notification data before removing
+                            const cardBody = notificationCard.querySelector('.card-body');
+                            const titleElement = cardBody.querySelector('.card-title');
+                            const messageElement = cardBody.querySelector('.card-text');
+                            
                             const notificationData = {
                                 id: notificationId,
-                                title: notificationItem.querySelector('h6').textContent,
-                                message: notificationItem.querySelector('p').textContent,
-                                sentTime: notificationItem.querySelector('.notification-time').textContent.replace('Sent: ', ''),
-                                priority: notificationItem.classList.contains('priority-urgent') ? 'urgent' :
-                                         notificationItem.classList.contains('priority-high') ? 'high' :
-                                         notificationItem.classList.contains('priority-medium') ? 'medium' : 'low'
+                                title: titleElement ? titleElement.textContent.trim() : 'Notification',
+                                message: messageElement ? messageElement.textContent.trim() : '',
+                                priority: 'medium' // Default priority for history
                             };
                             
                             // Smooth fade out animation
-                            notificationItem.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-                            notificationItem.style.opacity = '0';
-                            notificationItem.style.transform = 'translateX(100%)';
+                            notificationCard.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+                            notificationCard.style.opacity = '0';
+                            notificationCard.style.transform = 'translateX(100%)';
                             
                             setTimeout(() => {
                                 // Remove from new notifications
-                                notificationItem.remove();
+                                notificationCard.remove();
                                 
                                 // Add to history tab
                                 addToNotificationHistory(notificationData);
@@ -527,9 +642,279 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ All notification buttons initialized!');
     }
     
+    // Initialize Receive Order Message buttons
+    function initializeReceiveOrderButtons() {
+        console.log('🔧 Initializing receive order message buttons...');
+        
+        const receiveOrderButtons = document.querySelectorAll('.receive-order-btn');
+        console.log(`📋 Found ${receiveOrderButtons.length} receive order buttons`);
+        
+        receiveOrderButtons.forEach(function(button, index) {
+            // Remove any existing listeners to prevent duplicates
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            console.log(`🔧 Setting up receive order button ${index + 1}`);
+            
+            newButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('📦 Receive order message button clicked!');
+                
+                const notificationId = this.getAttribute('data-notification-id');
+                console.log('📝 Notification ID:', notificationId);
+                
+                if (!notificationId) {
+                    alert('Error: No notification ID found');
+                    return;
+                }
+                
+                // Show confirmation dialog
+                if (!confirm('Are you sure you want to acknowledge this order request? This will notify the admin that you have received the message.')) {
+                    return;
+                }
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (!csrfToken) {
+                    alert('Error: CSRF token not found. Please refresh the page.');
+                    return;
+                }
+                
+                console.log('🔐 CSRF token found');
+                
+                // Show loading state
+                const originalHTML = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Acknowledging...';
+                this.disabled = true;
+                
+                console.log('📡 Sending order acknowledgment request...');
+                
+                // Create form data
+                const formData = new FormData();
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+                formData.append('order_id', notificationId); // Use notification ID to find order
+                
+                // Send AJAX request to acknowledge order
+                fetch('/acknowledge-order/', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                })
+                .then(response => {
+                    console.log('📨 Response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 Response data:', data);
+                    
+                    if (data.success) {
+                        console.log('✅ Order acknowledgment successful!');
+                        
+                        // Find the notification card
+                        const notificationCard = this.closest('.col-lg-6');
+                        if (notificationCard) {
+                            // Update the button to show acknowledged state
+                            this.innerHTML = '<i class="fas fa-check-circle text-success"></i> Acknowledged';
+                            this.className = 'btn btn-sm btn-success';
+                            this.disabled = true;
+                            
+                            // Add acknowledgment badge to notification
+                            const titleElement = notificationCard.querySelector('.card-title');
+                            if (titleElement && !titleElement.querySelector('.acknowledgment-badge')) {
+                                const ackBadge = document.createElement('span');
+                                ackBadge.className = 'badge bg-success ms-2 acknowledgment-badge';
+                                ackBadge.innerHTML = '<i class="fas fa-handshake me-1"></i>ACKNOWLEDGED';
+                                titleElement.appendChild(ackBadge);
+                            }
+                            
+                            // Show success message
+                            showSuccessMessage('✅ Order message acknowledged! Admin has been notified.');
+                        }
+                    } else {
+                        console.error('❌ Server error:', data.error);
+                        alert('Error: ' + (data.error || 'Failed to acknowledge order'));
+                        
+                        // Restore button state
+                        this.innerHTML = originalHTML;
+                        this.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Network error:', error);
+                    alert('Network error. Please check your connection and try again.');
+                    
+                    // Restore button state
+                    this.innerHTML = originalHTML;
+                    this.disabled = false;
+                });
+            });
+        });
+        
+        console.log('✅ All receive order buttons initialized!');
+    }
+    
+    // Initialize Update Order Status buttons
+    function initializeUpdateOrderButtons() {
+        console.log('🚚 Initializing update order status buttons...');
+        
+        const updateOrderButtons = document.querySelectorAll('.update-order-btn');
+        console.log(`📋 Found ${updateOrderButtons.length} update order buttons`);
+        
+        updateOrderButtons.forEach(function(button, index) {
+            // Remove any existing listeners to prevent duplicates
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            console.log(`🔧 Setting up update order button ${index + 1}`);
+            
+            newButton.addEventListener('click', function(event) {
+                event.preventDefault();
+                event.stopPropagation();
+                
+                console.log('🚚 Update order status button clicked!');
+                
+                const notificationId = this.getAttribute('data-notification-id');
+                const productName = this.getAttribute('data-product-name');
+                console.log('📝 Notification ID:', notificationId, 'Product:', productName);
+                
+                if (!notificationId) {
+                    alert('Error: No notification ID found');
+                    return;
+                }
+                
+                // Show confirmation dialog
+                if (!confirm(`Mark order for "${productName}" as placed with supplier?\n\nThis will notify the admin that you have contacted the supplier and placed the order.`)) {
+                    return;
+                }
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (!csrfToken) {
+                    alert('Error: CSRF token not found. Please refresh the page.');
+                    return;
+                }
+                
+                console.log('🔐 CSRF token found');
+                
+                // Show loading state
+                const originalHTML = this.innerHTML;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Updating...';
+                this.disabled = true;
+                
+                console.log('📡 Sending order status update request...');
+                
+                // We need to find the order ID from the notification
+                // For now, we'll create a new endpoint to handle this
+                fetch('/update-order-from-notification/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: `csrfmiddlewaretoken=${csrfToken.value}&notification_id=${notificationId}&status=ordered`
+                })
+                .then(response => {
+                    console.log('📨 Response status:', response.status);
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('📊 Response data:', data);
+                    
+                    if (data.success) {
+                        console.log('✅ Order status update successful!');
+                        
+                        // Update the button to show success state
+                        this.innerHTML = '<i class="fas fa-check-circle text-success"></i> Ordered';
+                        this.className = 'btn btn-sm btn-success me-1';
+                        this.disabled = true;
+                        
+                        // Show success message
+                        showSuccessMessage('✅ Order marked as placed with supplier! Admin has been notified.');
+                    } else {
+                        console.error('❌ Server error:', data.error);
+                        alert('Error: ' + (data.error || 'Failed to update order status'));
+                        
+                        // Restore button state
+                        this.innerHTML = originalHTML;
+                        this.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Network error:', error);
+                    alert('Network error. Please check your connection and try again.');
+                    
+                    // Restore button state
+                    this.innerHTML = originalHTML;
+                    this.disabled = false;
+                });
+            });
+        });
+        
+        console.log('✅ All update order buttons initialized!');
+    }
+    
+    // Initialize Stock Form with Product Information
+    function initializeStockForm() {
+        console.log('📦 Initializing stock form...');
+        
+        const productSelect = document.querySelector('#id_product');
+        const productInfo = document.getElementById('productInfo');
+        const currentStockSpan = document.getElementById('currentStock');
+        const pendingOrdersSpan = document.getElementById('pendingOrders');
+        const orderDetails = document.getElementById('orderDetails');
+        
+        if (!productSelect) {
+            console.log('❌ Product select not found');
+            return;
+        }
+        
+        // Product data from Django context - using simple object
+        const productData = {};
+        
+        productSelect.addEventListener('change', function() {
+            const selectedProductId = this.value;
+            
+            if (selectedProductId && productData[selectedProductId]) {
+                const product = productData[selectedProductId];
+                
+                // Show product info
+                productInfo.style.display = 'block';
+                
+                // Update current stock
+                currentStockSpan.textContent = product.stock + ' units';
+                currentStockSpan.className = 'badge ms-1 ' + 
+                    (product.stock < 10 ? 'bg-danger' : 
+                     product.stock < 50 ? 'bg-warning' : 'bg-success');
+                
+                // Update pending orders
+                pendingOrdersSpan.textContent = product.pendingOrders + ' orders';
+                pendingOrdersSpan.className = 'badge ms-1 ' + 
+                    (product.pendingOrders > 0 ? 'bg-warning text-dark' : 'bg-secondary');
+                
+                // Show order details if there are pending orders
+                if (product.pendingOrders > 0) {
+                    orderDetails.style.display = 'block';
+                } else {
+                    orderDetails.style.display = 'none';
+                }
+                
+                console.log(`📊 Product info updated: ${product.name} - Stock: ${product.stock}, Orders: ${product.pendingOrders}`);
+            } else {
+                // Hide product info if no product selected
+                productInfo.style.display = 'none';
+            }
+        });
+        
+        console.log('✅ Stock form initialized!');
+    }
+    
     // Helper function to add notification to history tab
     function addToNotificationHistory(notificationData) {
-        const historyTab = document.querySelector('#notification-history');
+        const historyTab = document.querySelector('#read-notifications');
         if (historyTab) {
             // Get current IST time
             const now = new Date();
@@ -545,61 +930,46 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Create history item HTML with priority colors
-            const priorityClasses = {
-                'urgent': 'border-danger bg-danger-subtle',
-                'high': 'border-warning bg-warning-subtle', 
-                'medium': 'border-info bg-info-subtle',
-                'low': 'border-secondary bg-light'
-            };
-            
-            const priorityBadges = {
-                'urgent': 'bg-danger',
-                'high': 'bg-warning text-dark',
-                'medium': 'bg-info',
-                'low': 'bg-secondary'
-            };
-            
             const historyItem = document.createElement('div');
-            historyItem.className = `notification-item-read mb-3 p-3 border rounded ${priorityClasses[notificationData.priority] || 'border-secondary bg-light'}`;
+            historyItem.className = 'col-lg-6 mb-3';
             historyItem.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start">
-                    <div class="flex-grow-1">
-                        <h6 class="mb-1 text-muted">
-                            <i class="fas fa-check-circle text-success me-1"></i>${notificationData.title}
-                            <span class="badge ms-2 ${priorityBadges[notificationData.priority] || 'bg-secondary'}">
-                                ${notificationData.priority.toUpperCase()}
-                            </span>
-                        </h6>
-                        <p class="mb-2 text-muted small">${notificationData.message}</p>
-                        <div class="small text-muted mt-2">
-                            <i class="fas fa-clock me-1"></i>Sent: ${notificationData.sentTime}
-                            <span class="ms-3"><i class="fas fa-check me-1"></i>Read: ${currentTime}</span>
+                <div class="card h-100 border-start border-4 border-success opacity-75">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0 text-muted">
+                                <i class="fas fa-check-circle text-success me-1"></i>${notificationData.title}
+                            </h6>
+                            <span class="badge bg-success">READ</span>
                         </div>
-                    </div>
-                    <div class="text-end">
-                        <span class="badge bg-success">Read</span>
+                        <p class="card-text small text-muted mb-2">${notificationData.message}</p>
+                        <div class="small text-muted">
+                            <i class="fas fa-clock me-1"></i>Read: ${currentTime}
+                        </div>
                     </div>
                 </div>
             `;
             
             // Add to top of history tab
-            const existingItems = historyTab.querySelectorAll('.notification-item-read');
+            const existingItems = historyTab.querySelectorAll('.col-lg-6');
             if (existingItems.length > 0) {
                 historyTab.insertBefore(historyItem, existingItems[0]);
             } else {
                 // Replace the "no history" message
-                const noHistoryMsg = historyTab.querySelector('.text-center.py-4');
+                const noHistoryMsg = historyTab.querySelector('.text-center.py-5');
                 if (noHistoryMsg) {
                     noHistoryMsg.remove();
                 }
-                historyTab.appendChild(historyItem);
+                const row = document.createElement('div');
+                row.className = 'row';
+                row.appendChild(historyItem);
+                historyTab.appendChild(row);
             }
             
             // Update history tab count
-            const historyTabButton = document.querySelector('#history-tab');
+            const historyTabButton = document.querySelector('#read-notifications-tab');
             if (historyTabButton) {
-                const currentHistoryCount = historyTab.querySelectorAll('.notification-item-read').length;
-                historyTabButton.innerHTML = `<i class="fas fa-history me-1"></i>History (${currentHistoryCount})`;
+                const currentHistoryCount = historyTab.querySelectorAll('.col-lg-6').length;
+                historyTabButton.innerHTML = `<i class="fas fa-check-circle me-1"></i>Read (${currentHistoryCount})`;
             }
         }
     }
@@ -607,10 +977,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper function to update notification badge
     function updateNotificationBadge() {
         const badge = document.querySelector('.position-absolute.badge.bg-danger');
-        const newTab = document.querySelector('#new-tab');
+        const newTab = document.querySelector('#new-notifications-tab');
+        const mainTabBadge = document.querySelector('#notifications-tab .badge');
         
         // Count visible notifications in new tab
-        const visibleNotifications = document.querySelectorAll('#new-notifications .notification-item:not([style*="display: none"])').length;
+        const visibleNotifications = document.querySelectorAll('#new-notifications .col-lg-6:not([style*="display: none"])').length;
         
         if (badge) {
             if (visibleNotifications > 0) {
@@ -621,20 +992,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
         
+        // Update main tab badge
+        if (mainTabBadge) {
+            if (visibleNotifications > 0) {
+                mainTabBadge.textContent = visibleNotifications;
+                mainTabBadge.style.display = 'inline';
+            } else {
+                mainTabBadge.style.display = 'none';
+            }
+        }
+        
         // Update new tab count
         if (newTab) {
-            newTab.innerHTML = `<i class="fas fa-bell me-1"></i>New Notifications (${visibleNotifications})`;
+            newTab.innerHTML = `<i class="fas fa-bell me-1"></i>New (${visibleNotifications})`;
         }
         
         // Show "no notifications" message if needed
         if (visibleNotifications === 0) {
-            const newNotificationsTab = document.querySelector('#new-notifications');
-            if (newNotificationsTab && !newNotificationsTab.querySelector('.text-center.py-4')) {
+            const newNotificationsTab = document.querySelector('#new-notifications .row');
+            if (newNotificationsTab && !newNotificationsTab.querySelector('.text-center.py-5')) {
                 newNotificationsTab.innerHTML = `
-                    <div class="text-center py-4">
-                        <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">No new notifications</h5>
-                        <p class="text-muted">You're all caught up!</p>
+                    <div class="col-12">
+                        <div class="text-center py-5">
+                            <i class="fas fa-bell-slash fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">No new notifications</h5>
+                            <p class="text-muted">You're all caught up!</p>
+                        </div>
                     </div>
                 `;
             }
@@ -664,58 +1047,83 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize when DOM is ready
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeNotificationButtons);
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeNotificationButtons();
+            initializeReceiveOrderButtons();
+            initializeUpdateOrderButtons();
+            initializeStockForm();
+        });
     } else {
         initializeNotificationButtons();
+        initializeReceiveOrderButtons();
+        initializeUpdateOrderButtons();
+        initializeStockForm();
     }
     
     console.log('📜 Notification system script loaded successfully');
 })();
+
+// Function to show full admin message
+function showFullMessage(notificationId) {
+    // Simple alert for now - can be enhanced with modal later
+    alert(`Viewing full details for notification ID: ${notificationId}`);
+    
+    // Mark as read after viewing
+    const readBtn = document.querySelector(`[data-notification-id="${notificationId}"].mark-read-btn`);
+    if (readBtn) {
+        setTimeout(() => {
+            readBtn.click();
+        }, 1000);
+    }
+}
 </script>
 
 <style>
-/* Notification styling with priority colors */
-.notification-item {
+/* Modern Tab Styling */
+.nav-tabs .nav-link {
+    border: none;
+    border-radius: 0;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 12px 20px;
     transition: all 0.3s ease;
-    border-left: 4px solid #007bff;
 }
 
-.notification-item.priority-urgent {
-    border-left-color: #dc3545;
-    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.2);
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #0d6efd;
+    background-color: #f8f9fa;
 }
 
-.notification-item.priority-urgent:hover {
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    border-bottom: 2px solid #0d6efd;
 }
 
-.notification-item.priority-high {
-    border-left-color: #fd7e14;
-    box-shadow: 0 2px 8px rgba(253, 126, 20, 0.2);
+/* Card Hover Effects */
+.card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
 }
 
-.notification-item.priority-high:hover {
-    box-shadow: 0 4px 12px rgba(253, 126, 20, 0.3);
-}
-
-.notification-item.priority-medium {
-    border-left-color: #0dcaf0;
-    box-shadow: 0 2px 8px rgba(13, 202, 240, 0.2);
-}
-
-.notification-item.priority-medium:hover {
-    box-shadow: 0 4px 12px rgba(13, 202, 240, 0.3);
-}
-
-.notification-item.priority-low {
-    border-left-color: #6c757d;
-}
-
-.notification-item:hover {
+.card:hover {
     transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-/* Priority badge animations */
+/* Notification Cards */
+.card.border-start {
+    transition: all 0.3s ease;
+}
+
+.card.border-start:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+
+/* Priority Badge Animations */
 .badge {
     animation: pulse-priority 2s infinite;
 }
@@ -726,37 +1134,16 @@ document.addEventListener('DOMContentLoaded', function() {
     100% { transform: scale(1); }
 }
 
-/* Urgent notifications get special attention */
-.notification-item.priority-urgent .badge {
-    animation: urgent-blink 1.5s infinite;
-}
-
-@keyframes urgent-blink {
-    0%, 50% { opacity: 1; }
-    25%, 75% { opacity: 0.7; }
-}
-
-.nav-link .badge {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.1); }
-    100% { transform: scale(1); }
-}
-
-/* Mark as read button styling */
-.mark-read-btn {
+/* Button Styling */
+.btn-sm {
     transition: all 0.2s ease;
-    position: relative;
 }
 
-.mark-read-btn:hover {
-    transform: scale(1.1);
+.btn-sm:hover {
+    transform: scale(1.05);
 }
 
-.mark-read-btn:disabled {
+.btn-sm:disabled {
     opacity: 0.6;
     transform: none;
 }
@@ -764,6 +1151,7 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Success message styling */
 .alert.position-fixed {
     animation: slideInRight 0.3s ease-out;
+    z-index: 9999;
 }
 
 @keyframes slideInRight {
@@ -775,6 +1163,60 @@ document.addEventListener('DOMContentLoaded', function() {
         transform: translateX(0);
         opacity: 1;
     }
+}
+
+/* Table Styling */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Form Styling */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .nav-tabs .nav-link {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-sm {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Loading States */
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Empty State Styling */
+.text-center.py-5 {
+    color: #6c757d;
+}
+
+.text-center.py-5 i {
+    opacity: 0.5;
 }
 </style>
 {% endblock %}

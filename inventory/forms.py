@@ -31,6 +31,7 @@ class SignUpForm(UserCreationForm):
         choices=[
             ('inventory', 'Inventory Manager'),
             ('marketing', 'Marketing Analyst'),
+            ('admin', 'Admin'),
         ],
         widget=forms.Select(attrs={'class': 'form-control'})
     )
@@ -170,3 +171,50 @@ class SalesForm(forms.Form):
             return product
         except Product.DoesNotExist:
             raise forms.ValidationError(f"Product '{product_name}' not found. Please select from the dropdown.")
+
+class StockReceiveForm(forms.Form):
+    """Form for receiving ordered stock"""
+    order = forms.ModelChoiceField(
+        queryset=OrderQueue.objects.filter(status='ordered'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+        label="Select Order to Receive",
+        empty_label="Choose an order..."
+    )
+    received_quantity = forms.IntegerField(
+        min_value=1,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Enter received quantity'}),
+        label="Received Quantity"
+    )
+    expiry_date = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
+        label="Expiry Date"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Only show orders that are in "ordered" status and acknowledged
+        self.fields['order'].queryset = OrderQueue.objects.filter(
+            status='ordered',
+            message_received=True
+        ).select_related('product', 'ordered_by').order_by('-created_at')
+        
+        # Custom display for orders
+        self.fields['order'].label_from_instance = self.order_label_from_instance
+    
+    def order_label_from_instance(self, obj):
+        """Custom label for order dropdown"""
+        return f"{obj.product.name} - {obj.quantity} units (Stock: {obj.product.total_stock}) - by {obj.ordered_by.first_name or obj.ordered_by.username}"
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        order = cleaned_data.get('order')
+        received_quantity = cleaned_data.get('received_quantity')
+        
+        if order and received_quantity:
+            if received_quantity > order.quantity * 2:  # Allow up to 2x ordered quantity
+                raise forms.ValidationError(
+                    f"Received quantity ({received_quantity}) seems too high for ordered quantity ({order.quantity}). "
+                    f"Please verify the amount."
+                )
+        
+        return cleaned_data
