@@ -70,6 +70,16 @@
                     {% endif %}
                 </ul>
                 <ul class="navbar-nav">
+                    <!-- User Identity Display -->
+                    <li class="nav-item me-3">
+                        <div class="nav-link text-white">
+                            <i class="fas fa-user-circle me-1"></i>
+                            <strong>{{ user.userprofile.display_name }}</strong>
+                            {% if user.userprofile.store_name %}
+                                <br><small class="text-white-50"><i class="fas fa-store me-1"></i>{{ user.userprofile.store_name }}</small>
+                            {% endif %}
+                        </div>
+                    </li>
                     <li class="nav-item dropdown me-3">
                         <a class="nav-link position-relative" href="#" id="notificationDropdown" role="button" 
                            onclick="showNotifications()">
@@ -390,6 +400,52 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <!-- Second Row: Request Product from Admin -->
+                        <div class="row">
+                            <div class="col-12 mb-4">
+                                <div class="card">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Request Product from Admin</h5>
+                                        <small class="text-muted">Order products from admin - they will check availability and send you the quantity</small>
+                                    </div>
+                                    <div class="card-body">
+                                        <form method="post" id="orderRequestForm">
+                                            {% csrf_token %}
+                                            <div class="row">
+                                                <div class="col-md-6 mb-3">
+                                                    <label for="order_product" class="form-label">
+                                                        <i class="fas fa-box me-1"></i>Select Product
+                                                    </label>
+                                                    <select class="form-select" id="order_product" name="order_product" required>
+                                                        <option value="">Choose a product...</option>
+                                                        {% for product in products %}
+                                                        <option value="{{ product.id }}">{{ product.name }} ({{ product.category }})</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-4 mb-3">
+                                                    <label for="order_quantity" class="form-label">
+                                                        <i class="fas fa-sort-numeric-up me-1"></i>Quantity Needed
+                                                    </label>
+                                                    <input type="number" class="form-control" id="order_quantity" name="order_quantity" 
+                                                           min="1" placeholder="Enter quantity" required>
+                                                </div>
+                                                <div class="col-md-2 mb-3 d-flex align-items-end">
+                                                    <button type="submit" name="request_product" class="btn btn-warning w-100">
+                                                        <i class="fas fa-paper-plane me-1"></i>Send Request
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="alert alert-info mb-0">
+                                                <i class="fas fa-info-circle me-2"></i>
+                                                <strong>How it works:</strong> Your request will be sent to admin. They will check stock availability and send you the approved quantity. A bill will be automatically generated.
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Products Panel -->
@@ -404,7 +460,8 @@
                                         <th><i class="fas fa-rupee-sign me-1"></i>Selling Price</th>
                                         <th><i class="fas fa-rupee-sign me-1"></i>Current Price</th>
                                         <th><i class="fas fa-chart-bar me-1"></i>Class</th>
-                                        <th><i class="fas fa-warehouse me-1"></i>Stock</th>
+                                        <th><i class="fas fa-warehouse me-1"></i>My Stock</th>
+                                        <th><i class="fas fa-building me-1"></i>Total Stock</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -421,7 +478,12 @@
                                             </span>
                                         </td>
                                         <td>
-                                            <span class="badge {% if product.total_stock < 10 %}bg-danger{% elif product.total_stock < 50 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                            <span class="badge {% if product.user_stock < 10 %}bg-danger{% elif product.user_stock < 50 %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                                {{ product.user_stock }} units
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">
                                                 {{ product.total_stock }} units
                                             </span>
                                         </td>

@@ -11,6 +11,28 @@ class UserProfile(models.Model):
     ]
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    store_name = models.CharField(max_length=100, blank=True, null=True)  # Store/Location name
+    store_location = models.CharField(max_length=200, blank=True, null=True)  # Full address
+    phone_number = models.CharField(max_length=15, blank=True, null=True)  # Contact number
+    
+    def __str__(self):
+        store_info = f" - {self.store_name}" if self.store_name else ""
+        return f"{self.user.username} ({self.role}){store_info}"
+    
+    @property
+    def display_name(self):
+        """Get user's display name"""
+        if self.user.first_name:
+            return f"{self.user.first_name} {self.user.last_name}".strip()
+        return self.user.username
+    
+    @property
+    def full_identity(self):
+        """Get complete identity with store"""
+        name = self.display_name
+        if self.store_name:
+            return f"{name} ({self.store_name})"
+        return name
 
 class Product(models.Model):
     ABC_CHOICES = [
@@ -36,13 +58,39 @@ class Product(models.Model):
     @property
     def total_stock(self):
         from datetime import date
-        # Only count non-expired stock
+        # Only count non-expired stock (all users combined)
         return sum(
             stock.quantity for stock in self.expirystock_set.filter(
                 quantity__gt=0,
                 expiry_date__gte=date.today()  # Only include non-expired stock
             )
         )
+    
+    def get_user_stock(self, user):
+        """Get stock for a specific user"""
+        from datetime import date
+        return sum(
+            stock.quantity for stock in self.expirystock_set.filter(
+                user=user,
+                quantity__gt=0,
+                expiry_date__gte=date.today()
+            )
+        )
+    
+    def get_all_users_stock(self):
+        """Get stock breakdown by user"""
+        from datetime import date
+        from django.db.models import Sum
+        
+        stock_by_user = self.expirystock_set.filter(
+            user__isnull=False,  # Exclude stock without user assignment
+            quantity__gt=0,
+            expiry_date__gte=date.today()
+        ).values('user__username', 'user__first_name', 'user__last_name').annotate(
+            total=Sum('quantity')
+        ).order_by('-total')
+        
+        return stock_by_user
     
     @property
     def expired_stock(self):
@@ -83,15 +131,24 @@ class ExpiryStock(models.Model):
     quantity = models.IntegerField(default=0)
     expiry_date = models.DateField()
     created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)  # Track which inventory user owns this stock
     
     class Meta:
         ordering = ['expiry_date']
+    
+    def __str__(self):
+        user_name = self.user.username if self.user else "Unassigned"
+        return f"{self.product.name} - {self.quantity} units (Expires: {self.expiry_date}) - Owner: {user_name}"
 
 class OrderQueue(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
-        ('ordered', 'Ordered'),
-        ('received', 'Received'),
+        ('approved', 'Approved by Admin'),
+        ('partially_fulfilled', 'Partially Fulfilled'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
     ]
     
     INVENTORY_ACTION_CHOICES = [
@@ -101,13 +158,18 @@ class OrderQueue(models.Model):
     ]
     
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.IntegerField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    quantity = models.IntegerField()  # Requested quantity by inventory
+    approved_quantity = models.IntegerField(null=True, blank=True)  # Quantity approved by admin
+    fulfilled_quantity = models.IntegerField(default=0)  # Quantity actually sent/fulfilled
+    pending_quantity = models.IntegerField(default=0)  # Remaining quantity to be sent
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending')
+    expected_delivery_date = models.DateField(null=True, blank=True)  # When user can expect delivery
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     # New fields for enhanced workflow
-    ordered_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True)  # Admin who created order
+    ordered_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True)  # Admin who created order OR Inventory who requested
+    requested_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True, related_name='inventory_requests')  # Inventory user who requested
     message_sent = models.BooleanField(default=False)  # Whether notification was sent to inventory
     message_received = models.BooleanField(default=False)  # Whether inventory acknowledged the message
     message_received_at = models.DateTimeField(null=True, blank=True)  # When inventory acknowledged
@@ -119,6 +181,10 @@ class OrderQueue(models.Model):
     inventory_action_at = models.DateTimeField(null=True, blank=True)  # When inventory took action
     admin_marked_received = models.BooleanField(default=False)  # Whether admin marked as received (final step)
     admin_marked_received_at = models.DateTimeField(null=True, blank=True)  # When admin marked as received
+    
+    # Bill tracking
+    bill_generated = models.BooleanField(default=False)  # Whether bill was auto-generated
+    bill = models.ForeignKey('SalesBill', on_delete=models.SET_NULL, null=True, blank=True, related_name='order_requests')  # Link to generated bill
     
     def __str__(self):
         return f"Order: {self.product.name} - {self.quantity} units ({self.status})"
@@ -213,3 +279,60 @@ class AIRecommendation(models.Model):
     
     def __str__(self):
         return f"{self.product.name} - {self.get_recommendation_type_display()} ({self.status})"
+
+
+class LowStockThreshold(models.Model):
+    """User-specific low stock thresholds for products"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    threshold = models.IntegerField(default=10)  # Alert when stock goes below this
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ['user', 'product']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name} (Threshold: {self.threshold})"
+
+class StockMovement(models.Model):
+    """Complete audit trail of all stock movements"""
+    MOVEMENT_TYPES = [
+        ('add', 'Stock Added'),
+        ('deduct', 'Stock Deducted'),
+        ('transfer_out', 'Transferred Out'),
+        ('transfer_in', 'Transferred In'),
+        ('damage', 'Damaged/Lost'),
+        ('return', 'Returned'),
+        ('adjustment', 'Manual Adjustment'),
+    ]
+    
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)  # Who performed the action
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
+    quantity = models.IntegerField()
+    from_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_transfers_out')
+    to_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='stock_transfers_in')
+    reason = models.TextField(blank=True, null=True)
+    reference_number = models.CharField(max_length=100, blank=True, null=True)  # Bill number, order ID, etc.
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.movement_type} - {self.product.name} ({self.quantity} units) by {self.user.username}"
+
+class OrderStatusHistory(models.Model):
+    """Track order status changes"""
+    order = models.ForeignKey(OrderQueue, on_delete=models.CASCADE, related_name='status_history')
+    status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    notes = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Order #{self.order.id} - {self.status} at {self.created_at}"

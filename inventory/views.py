@@ -364,6 +364,8 @@ def user_signup(request):
         password = request.POST.get('password', '').strip()
         confirm_password = request.POST.get('confirm_password', '').strip()
         role = request.POST.get('role', '').strip()
+        store_name = request.POST.get('store_name', '').strip()
+        store_location = request.POST.get('store_location', '').strip()
         
         # Validation
         if not all([username, email, password, confirm_password, role]):
@@ -406,9 +408,11 @@ def user_signup(request):
             )
             
             # Create user profile with selected role
-            UserProfile.objects.create(
+            profile = UserProfile.objects.create(
                 user=user,
-                role=role
+                role=role,
+                store_name=store_name if store_name else None,
+                store_location=store_location if store_location else None
             )
             
             # Auto-login the new user
@@ -440,7 +444,8 @@ def inventory_dashboard(request):
     generate_notifications()
     
     products = Product.objects.all()
-    recent_stock = ExpiryStock.objects.order_by('-created_at')[:10]
+    # Show only current user's stock in recent stock
+    recent_stock = ExpiryStock.objects.filter(user=request.user).order_by('-created_at')[:10]
     
     # Get unread notifications for inventory role with proper priority ordering
     # Prioritize admin messages first, then by priority, then by creation date
@@ -499,7 +504,9 @@ def inventory_dashboard(request):
         elif 'add_stock' in request.POST:
             stock_form = StockEntryForm(request.POST)
             if stock_form.is_valid():
-                stock_entry = stock_form.save()
+                stock_entry = stock_form.save(commit=False)
+                stock_entry.user = request.user  # Assign stock to current user
+                stock_entry.save()
                 
                 # Check if there are pending orders for this product
                 pending_orders = OrderQueue.objects.filter(
@@ -537,11 +544,60 @@ def inventory_dashboard(request):
                 # Show success message with order context if applicable
                 if pending_orders.exists():
                     order_count = pending_orders.count()
-                    messages.success(request, f'✅ Stock added successfully! Admin has been notified about {order_count} pending order(s) for {stock_entry.product.name}.')
+                    messages.success(request, f'✅ Stock added to your inventory! Admin has been notified about {order_count} pending order(s) for {stock_entry.product.name}.')
                 else:
-                    messages.success(request, '✅ Stock added successfully!')
+                    messages.success(request, f'✅ Stock added to your inventory successfully! You now have {stock_entry.product.get_user_stock(request.user)} units of {stock_entry.product.name}.')
                 
                 return redirect('inventory_dashboard')
+        
+        elif 'request_product' in request.POST:
+            # Inventory user requesting product from admin
+            product_id = request.POST.get('order_product')
+            quantity = request.POST.get('order_quantity')
+            
+            if product_id and quantity:
+                try:
+                    product = Product.objects.get(id=product_id)
+                    quantity = int(quantity)
+                    
+                    # Create order request
+                    order_request = OrderQueue.objects.create(
+                        product=product,
+                        quantity=quantity,
+                        requested_by=request.user,
+                        status='pending'
+                    )
+                    
+                    # Get user's store info
+                    user_profile = request.user.userprofile
+                    user_identity = user_profile.full_identity
+                    
+                    # Notify admin about the request
+                    Notification.objects.create(
+                        title=f"🛒 Product Request: {product.name}",
+                        message=f"📍 From: {user_identity} | "
+                               f"📦 Product: {product.name} ({product.category}) | "
+                               f"🔢 Qty: {quantity} units | "
+                               f"💰 Price: ₹{product.cost_price} (Cost) / ₹{product.selling_price} (Selling) | "
+                               f"📋 Available: {product.total_stock} units | "
+                               f"📅 {timezone.now().strftime('%d %b %Y, %H:%M')}",
+                        notification_type='admin_message',
+                        priority='high',
+                        target_user_role='admin',
+                        product=product
+                    )
+                    
+                    messages.success(request, f'✅ Product request sent to admin! You requested {quantity} units of {product.name}. Admin will check availability and send you the approved quantity.')
+                    return redirect('inventory_dashboard')
+                    
+                except Product.DoesNotExist:
+                    messages.error(request, '❌ Product not found!')
+                except ValueError:
+                    messages.error(request, '❌ Invalid quantity!')
+            else:
+                messages.error(request, '❌ Please select a product and enter quantity!')
+            
+            return redirect('inventory_dashboard')
         
         elif 'mark_read' in request.POST or request.POST.get('notification_id'):
             print(f"DEBUG: Mark read request received")
@@ -559,7 +615,6 @@ def inventory_dashboard(request):
                     
                     notification.is_read = True
                     # Manually set the updated_at to current time
-                    from django.utils import timezone
                     notification.updated_at = timezone.now()
                     notification.save(update_fields=['is_read', 'updated_at'])
                     
@@ -650,8 +705,8 @@ def inventory_dashboard(request):
     product_form = ProductForm()
     stock_form = StockEntryForm()
     
-    # Add product order data for JavaScript
-    products_with_orders = []
+    # Add user-specific stock and product order data
+    products_with_data = []
     for product in products:
         # Count only orders that were actually created by admin and are still pending/ordered
         pending_orders_count = OrderQueue.objects.filter(
@@ -661,12 +716,21 @@ def inventory_dashboard(request):
             message_received=True  # Only acknowledged orders
         ).count()
         
-        products_with_orders.append({
+        # Get user-specific stock
+        user_stock = product.get_user_stock(request.user)
+        
+        # Add to product object for template access
+        product.user_stock = user_stock
+        product.pending_orders_count = pending_orders_count
+        
+        products_with_data.append({
             'id': product.id,
             'name': product.name,
             'stock': product.total_stock,
+            'user_stock': user_stock,
             'pending_orders': pending_orders_count
         })
+
     
     context = {
         'products': products,
@@ -678,14 +742,13 @@ def inventory_dashboard(request):
         'urgent_count': urgent_count,
         'high_count': high_count,
         'total_notifications': total_notifications,
-        'products_with_orders': products_with_orders,
+        'products_with_data': products_with_data,
     }
     
     return render(request, 'inventory_dashboard.html', context)
 
 @login_required
 def trend_dashboard(request):
-    from django.utils import timezone
     
     products = Product.objects.all()
     
@@ -1003,7 +1066,6 @@ def enhanced_simulation_ajax_update(request, products):
     """AJAX version of enhanced simulation when AI is not available"""
     import random
     from datetime import datetime
-    from django.utils import timezone
     
     start_time = timezone.now()
     print(f"--- Starting AJAX Enhanced Simulation Update at {start_time.strftime('%H:%M:%S')} ---")
@@ -1118,7 +1180,6 @@ def enhanced_simulation_update(request, products):
     """Fallback enhanced simulation when AI is not available"""
     import random
     from datetime import datetime
-    from django.utils import timezone
     
     start_time = timezone.now()
     print(f"--- Starting Enhanced Simulation Update at {start_time.strftime('%H:%M:%S')} ---")
@@ -1398,6 +1459,105 @@ Notification Details:
             else:
                 print(f"🔧 DEBUG: Missing required fields: {missing_fields}")
                 messages.error(request, '⚠️ Please fill in all required fields: Product Name, Category, Title, and Recommendation.')
+        
+        elif 'approve_product_request' in request.POST:
+            print(f"🔧 DEBUG: Approve product request form submitted")
+            request_id = request.POST.get('request_id')
+            approved_quantity = request.POST.get('approved_quantity')
+            
+            if request_id and approved_quantity:
+                try:
+                    order_request = OrderQueue.objects.get(id=request_id, status='pending')
+                    approved_quantity = int(approved_quantity)
+                    product = order_request.product
+                    
+                    # Check if enough stock is available
+                    if approved_quantity > product.total_stock:
+                        messages.error(request, f'❌ Not enough stock! Available: {product.total_stock} units, Requested: {approved_quantity} units')
+                        return redirect('admin_dashboard')
+                    
+                    # Update order request
+                    order_request.approved_quantity = approved_quantity
+                    order_request.status = 'approved'
+                    order_request.save()
+                    
+                    # Generate bill automatically
+                    from datetime import datetime
+                    bill_number = f"BILL-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    
+                    # Create bill
+                    bill = SalesBill.objects.create(
+                        bill_number=bill_number,
+                        created_by=order_request.requested_by,  # Bill for the inventory user who requested
+                        total_amount=0  # Will be calculated
+                    )
+                    
+                    # Add bill item
+                    item_total = product.selling_price * approved_quantity
+                    SalesBillItem.objects.create(
+                        bill=bill,
+                        product=product,
+                        quantity=approved_quantity,
+                        price=product.selling_price,
+                        total=item_total
+                    )
+                    
+                    # Update bill total
+                    bill.total_amount = item_total
+                    bill.save()
+                    
+                    # Link bill to order request
+                    order_request.bill = bill
+                    order_request.bill_generated = True
+                    order_request.save()
+                    
+                    # Deduct stock using FEFO logic
+                    remaining_quantity = approved_quantity
+                    stock_entries = ExpiryStock.objects.filter(
+                        product=product,
+                        quantity__gt=0
+                    ).order_by('expiry_date')
+                    
+                    for stock_entry in stock_entries:
+                        if remaining_quantity <= 0:
+                            break
+                        
+                        if stock_entry.quantity >= remaining_quantity:
+                            stock_entry.quantity -= remaining_quantity
+                            stock_entry.save()
+                            remaining_quantity = 0
+                        else:
+                            remaining_quantity -= stock_entry.quantity
+                            stock_entry.quantity = 0
+                            stock_entry.save()
+                    
+                    # Notify inventory user
+                    Notification.objects.create(
+                        title=f"✅ Request Approved: {product.name}",
+                        message=f"📦 Product: {product.name} | "
+                               f"🔢 Requested: {order_request.quantity} units | "
+                               f"✅ Approved: {approved_quantity} units | "
+                               f"💰 Amount: ₹{item_total} | "
+                               f"📄 Bill: {bill_number} | "
+                               f"📊 Your Stock: {product.get_user_stock(order_request.requested_by)} units | "
+                               f"📅 {timezone.now().strftime('%d %b %Y, %H:%M')}",
+                        notification_type='admin_message',
+                        priority='high',
+                        target_user_role='inventory',
+                        product=product
+                    )
+                    
+                    messages.success(request, f'✅ Product request approved! Sent {approved_quantity} units of {product.name}. Bill #{bill_number} generated automatically.')
+                    return redirect('admin_dashboard')
+                    
+                except OrderQueue.DoesNotExist:
+                    messages.error(request, '❌ Order request not found!')
+                except ValueError:
+                    messages.error(request, '❌ Invalid quantity!')
+                except Exception as e:
+                    messages.error(request, f'❌ Error approving request: {str(e)}')
+            else:
+                messages.error(request, '❌ Missing request ID or quantity!')
     
     discount_form = DiscountForm()
     
@@ -1463,6 +1623,12 @@ Notification Details:
     # Sort by join date (newest first)
     team_data.sort(key=lambda x: x['user'].date_joined, reverse=True)
     
+    # Get product requests from inventory users (pending only)
+    product_requests = OrderQueue.objects.filter(
+        requested_by__isnull=False,  # Requested by inventory user
+        status='pending'
+    ).select_related('product', 'requested_by').order_by('-created_at')
+    
     context = {
         'stock_analysis': stock_analysis,
         'discount_form': discount_form,
@@ -1511,6 +1677,9 @@ Notification Details:
         # Team Management Data
         'inventory_users': team_data,
         'active_inventory_users': active_inventory_users,
+        
+        # Product Requests from Inventory
+        'product_requests': product_requests,
     }
     return render(request, 'admin_dashboard.html', context)
 
@@ -2295,7 +2464,6 @@ def search_products_api(request):
 def mark_notification_read(request, notification_id):
     """Mark a notification as read"""
     try:
-        from django.utils import timezone
         notification = Notification.objects.get(id=notification_id)
         notification.is_read = True
         notification.updated_at = timezone.now()

@@ -463,13 +463,37 @@
                             <i class="fas fa-briefcase me-1"></i> Select Your Role
                         </label>
                         <div class="input-wrapper">
-                            <select class="form-control" id="role" name="role" required>
+                            <select class="form-control" id="role" name="role" required onchange="toggleStoreFields()">
                                 <option value="">Choose your role...</option>
                                 <option value="inventory">📦 Inventory Manager</option>
                                 <option value="marketing">📊 Marketing Analyst</option>
                                 <option value="admin">🔧 System Administrator</option>
                             </select>
                             <i class="fas fa-briefcase input-icon"></i>
+                        </div>
+                    </div>
+
+                    <!-- Store Information (for Inventory users only) -->
+                    <div id="storeFields" style="display: none;">
+                        <div class="form-group">
+                            <label for="store_name" class="form-label">
+                                <i class="fas fa-store me-1"></i> Store/Branch Name
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control" id="store_name" name="store_name" 
+                                       placeholder="e.g., Mumbai Store, Delhi Branch">
+                                <i class="fas fa-store input-icon"></i>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="store_location" class="form-label">
+                                <i class="fas fa-map-marker-alt me-1"></i> Store Location
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="text" class="form-control" id="store_location" name="store_location" 
+                                       placeholder="e.g., Andheri West, Mumbai">
+                                <i class="fas fa-map-marker-alt input-icon"></i>
+                            </div>
                         </div>
                     </div>
 
@@ -551,6 +575,18 @@
             spinner.style.display = 'inline-block';
             btn.disabled = true;
         });
+
+        // Toggle store fields based on role selection
+        function toggleStoreFields() {
+            const role = document.getElementById('role').value;
+            const storeFields = document.getElementById('storeFields');
+            
+            if (role === 'inventory') {
+                storeFields.style.display = 'block';
+            } else {
+                storeFields.style.display = 'none';
+            }
+        }
 
         // Input focus animations and validation
         document.addEventListener('DOMContentLoaded', function() {
