@@ -461,7 +461,6 @@
                                         <th><i class="fas fa-rupee-sign me-1"></i>Current Price</th>
                                         <th><i class="fas fa-chart-bar me-1"></i>Class</th>
                                         <th><i class="fas fa-warehouse me-1"></i>My Stock</th>
-                                        <th><i class="fas fa-building me-1"></i>Total Stock</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -482,15 +481,10 @@
                                                 {{ product.user_stock }} units
                                             </span>
                                         </td>
-                                        <td>
-                                            <span class="badge bg-info">
-                                                {{ product.total_stock }} units
-                                            </span>
-                                        </td>
                                     </tr>
                                     {% empty %}
                                     <tr>
-                                        <td colspan="7" class="text-center text-muted py-4">
+                                        <td colspan="6" class="text-center text-muted py-4">
                                             <i class="fas fa-box-open fa-2x mb-2"></i>
                                             <br>No products available
                                         </td>

@@ -90,7 +90,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <h2 class="mb-1">AI Market Trend Intelligence</h2>
-                <p class="text-muted mb-0">Real-time demand forecasting and pricing recommendations</p>
+                <p class="text-muted mb-0">Demand forecasting and pricing recommendations</p>
             </div>
             <div class="d-flex gap-3">
                 <!-- <div class="text-center">
@@ -101,12 +101,12 @@
                     <div class="badge bg-danger fs-6">{{ low_demand_count|default:0 }}</div>
                     <small class="text-muted d-block">Low Demand</small>
                 </div> -->
-                <div class="text-center">
+                <!-- <div class="text-center">
                     <button type="button" class="btn btn-primary btn-sm" id="update-btn" onclick="startTrendAnalysis()">
                         <i class="fas fa-sync-alt me-1" id="update-icon"></i>
                         <span id="btn-text">Run Analysis</span>
                     </button>
-                </div>
+                </div> -->
             </div>
         </div>
     </div>
@@ -272,7 +272,7 @@
                     <!-- KPI Dashboard Panel -->
                     <div class="tab-pane fade" id="kpi-panel" role="tabpanel">
                         <div class="row">
-                            <div class="col-md-3 mb-4">
+                            <div class="col-md-4 mb-4">
                                 <div class="card h-100 border-success">
                                     <div class="card-body text-center">
                                         <div class="mb-3">
@@ -287,7 +287,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-4">
+                            <div class="col-md-4 mb-4">
                                 <div class="card h-100 border-danger">
                                     <div class="card-body text-center">
                                         <div class="mb-3">
@@ -302,7 +302,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3 mb-4">
+                            <div class="col-md-4 mb-4">
                                 <div class="card h-100 border-warning">
                                     <div class="card-body text-center">
                                         <div class="mb-3">
@@ -314,21 +314,6 @@
                                             <div class="progress-bar bg-warning" style="width: 60%;"></div>
                                         </div>
                                         <small class="text-muted">Recommended</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3 mb-4">
-                                <div class="card h-100 border-info">
-                                    <div class="card-body text-center">
-                                        <div class="mb-3">
-                                            <i class="fas fa-clock fa-3x text-info"></i>
-                                        </div>
-                                        <h3 class="text-info" id="current-time-display">--:--</h3>
-                                        <h6 class="text-muted">Real-Time Analysis</h6>
-                                        <div class="progress mt-2" style="height: 4px;">
-                                            <div class="progress-bar bg-info progress-bar-striped progress-bar-animated" style="width: 100%;"></div>
-                                        </div>
-                                        <small class="text-muted">Live Data</small>
                                     </div>
                                 </div>
                             </div>
@@ -423,18 +408,18 @@
                                                     </div>
                                                 {% endif %}
                                             </div>
-                                            <div class="d-flex gap-2 mt-2">
+                                            <!-- <div class="d-flex gap-2 mt-2">
                                                 <button class="btn btn-sm btn-outline-primary" 
                                                         data-product-id="{{ product.id }}"
-                                                        onclick="viewProductDetails(this.dataset.productId)">
+                                                        onclick="viewProductDetails('{{ product.id }}', this)">
                                                     <i class="fas fa-eye me-1"></i>Details
                                                 </button>
                                                 <button class="btn btn-sm btn-outline-success" 
                                                         data-product-id="{{ product.id }}"
-                                                        onclick="applyRecommendation(this.dataset.productId)">
+                                                        onclick="applyRecommendation('{{ product.id }}', this)">
                                                     <i class="fas fa-check me-1"></i>Apply
                                                 </button>
-                                            </div>
+                                            </div> -->
                                         </div>
                                     </div>
                                 </div>
@@ -984,39 +969,69 @@ function updateLastUpdatedTime(lastUpdated) {
 }
 
 // Action button functions
-function viewProductDetails(productId) {
-    // Show loading state
-    const button = event.target.closest('button');
-    const originalContent = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    button.disabled = true;
+function viewProductDetails(productId, buttonElement) {
+    console.log('📋 View Details clicked for product:', productId);
+    
+    if (!buttonElement) {
+        console.error('Button element not provided');
+        return;
+    }
+    
+    const originalContent = buttonElement.innerHTML;
+    buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    buttonElement.disabled = true;
+    
+    console.log('🔄 Fetching product details from:', `/product-details/${productId}/`);
     
     fetch(`/product-details/${productId}/`)
-        .then(response => response.json())
+        .then(response => {
+            console.log('📡 Response received:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
-            if (data.product) {
+            console.log('📦 Data received:', data);
+            if (data.name || data.product) {
                 showProductDetailsModal(data);
             } else {
                 showToast('error', 'Error', 'Product details not found');
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showToast('error', 'Error', 'Failed to load product details');
+            console.error('❌ Error:', error);
+            showToast('error', 'Error', 'Failed to load product details: ' + error.message);
         })
         .finally(() => {
-            button.innerHTML = originalContent;
-            button.disabled = false;
+            buttonElement.innerHTML = originalContent;
+            buttonElement.disabled = false;
         });
 }
 
-function applyRecommendation(productId) {
-    const button = event.target.closest('button');
-    const originalContent = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    button.disabled = true;
+function applyRecommendation(productId, buttonElement) {
+    console.log('✅ Apply clicked for product:', productId);
+    
+    if (!buttonElement) {
+        console.error('Button element not provided');
+        return;
+    }
+    
+    const originalContent = buttonElement.innerHTML;
+    buttonElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    buttonElement.disabled = true;
     
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    if (!csrfToken) {
+        console.error('CSRF token not found');
+        showToast('error', 'Error', 'Security token not found');
+        buttonElement.innerHTML = originalContent;
+        buttonElement.disabled = false;
+        return;
+    }
+    
+    console.log('🔄 Applying recommendation to:', `/apply-recommendation/`);
     
     fetch('/apply-recommendation/', {
         method: 'POST',
@@ -1027,22 +1042,32 @@ function applyRecommendation(productId) {
         },
         body: `product_id=${productId}`
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('📡 Response received:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('📦 Data received:', data);
         if (data.success) {
-            showToast('success', 'Applied', data.message);
-            // Optionally refresh the row or update UI
+            showToast('success', 'Applied', data.message || 'Recommendation applied successfully');
+            // Optionally refresh the page after 1 second
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
         } else {
             showToast('error', 'Failed', data.error || 'Failed to apply recommendation');
         }
     })
     .catch(error => {
-        console.error('Error:', error);
-        showToast('error', 'Error', 'Network error occurred');
+        console.error('❌ Error:', error);
+        showToast('error', 'Error', 'Network error: ' + error.message);
     })
     .finally(() => {
-        button.innerHTML = originalContent;
-        button.disabled = false;
+        buttonElement.innerHTML = originalContent;
+        buttonElement.disabled = false;
     });
 }
 
@@ -1083,7 +1108,7 @@ function dismissRecommendation(productId) {
 
 // Show product details modal
 function showProductDetailsModal(data) {
-    const product = data.product;
+    const product = data.product || data; // Handle both formats
     const recentStock = data.recent_stock || [];
     const recentSales = data.recent_sales || [];
     const metrics = data.metrics || {};
@@ -1107,9 +1132,9 @@ function showProductDetailsModal(data) {
                                     <tr><td><strong>Cost Price:</strong></td><td>₹${product.cost_price}</td></tr>
                                     <tr><td><strong>Selling Price:</strong></td><td>₹${product.selling_price}</td></tr>
                                     <tr><td><strong>Current Price:</strong></td><td>₹${product.current_price}</td></tr>
-                                    <tr><td><strong>ABC Class:</strong></td><td>${product.calculated_abc_classification}</td></tr>
+                                    <tr><td><strong>ABC Class:</strong></td><td>${product.abc_classification || product.calculated_abc_classification}</td></tr>
                                     <tr><td><strong>Total Stock:</strong></td><td>${product.total_stock} units</td></tr>
-                                    <tr><td><strong>Trend Score:</strong></td><td>${product.trend_score.toFixed(1)}/10</td></tr>
+                                    <tr><td><strong>Trend Score:</strong></td><td>${parseFloat(product.trend_score).toFixed(1)}/10</td></tr>
                                 </table>
                             </div>
                             <div class="col-md-6">
@@ -1122,6 +1147,7 @@ function showProductDetailsModal(data) {
                                 
                                 <h6 class="fw-bold mb-3 mt-4">Recent Stock Entries</h6>
                                 <div class="table-responsive" style="max-height: 150px; overflow-y: auto;">
+                                    ${recentStock.length > 0 ? `
                                     <table class="table table-sm">
                                         <thead><tr><th>Quantity</th><th>Expiry</th><th>Added</th></tr></thead>
                                         <tbody>
@@ -1134,6 +1160,7 @@ function showProductDetailsModal(data) {
                                             `).join('')}
                                         </tbody>
                                     </table>
+                                    ` : '<p class="text-muted small">No recent stock entries</p>'}
                                 </div>
                             </div>
                         </div>

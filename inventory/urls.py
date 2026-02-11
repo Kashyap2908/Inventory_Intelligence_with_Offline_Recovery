@@ -13,6 +13,7 @@ urlpatterns = [
     path('admin-panel/', views.admin_dashboard, name='admin_dashboard'),
     path('billing/', views.billing, name='billing'),
     path('bill-details/<int:bill_id>/', views.get_bill_details, name='get_bill_details'),
+    path('get-bill-details/', views.get_bill_details_api, name='get_bill_details_api'),  # API for admin dashboard modal
     path('product-details/<int:product_id>/', views.get_product_details, name='get_product_details'),
     path('create-order/', views.create_order, name='create_order'),
     path('admin-mark-order-seen/', views.admin_mark_order_seen, name='admin_mark_order_seen'),

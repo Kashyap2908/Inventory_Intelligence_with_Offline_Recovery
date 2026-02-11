@@ -92,6 +92,28 @@ class Product(models.Model):
         
         return stock_by_user
     
+    def get_company_stock(self):
+        """Get company warehouse stock (admin's stock)"""
+        from datetime import date
+        from django.contrib.auth.models import User
+        try:
+            company_user = User.objects.get(username='company_stock')
+            return self.get_user_stock(company_user)
+        except User.DoesNotExist:
+            return 0
+    
+    def get_inventory_users_stock(self):
+        """Get total stock across all inventory users (excluding company)"""
+        from datetime import date
+        return sum(
+            stock.quantity for stock in self.expirystock_set.filter(
+                user__isnull=False,
+                user__userprofile__role='inventory',
+                quantity__gt=0,
+                expiry_date__gte=date.today()
+            )
+        )
+    
     @property
     def expired_stock(self):
         from datetime import date

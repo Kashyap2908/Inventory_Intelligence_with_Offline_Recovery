@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Sum, F, Q
@@ -440,6 +441,13 @@ def user_signup(request):
 
 @login_required
 def inventory_dashboard(request):
+    # Check if user has a profile
+    if not hasattr(request.user, 'userprofile'):
+        messages.error(request, '❌ Your account does not have a user profile. Please contact admin or create a new account through signup.')
+        from django.contrib.auth import logout
+        logout(request)
+        return redirect('login')
+    
     # Generate notifications first
     generate_notifications()
     
@@ -508,6 +516,10 @@ def inventory_dashboard(request):
                 stock_entry.user = request.user  # Assign stock to current user
                 stock_entry.save()
                 
+                # Update trend score automatically
+                from inventory.trend_calculator import update_product_trend_score
+                new_score = update_product_trend_score(stock_entry.product)
+                
                 # Check if there are pending orders for this product
                 pending_orders = OrderQueue.objects.filter(
                     product=stock_entry.product,
@@ -567,6 +579,10 @@ def inventory_dashboard(request):
                         requested_by=request.user,
                         status='pending'
                     )
+                    
+                    # Update trend score automatically
+                    from inventory.trend_calculator import update_product_trend_score
+                    new_score = update_product_trend_score(product)
                     
                     # Get user's store info
                     user_profile = request.user.userprofile
@@ -749,6 +765,12 @@ def inventory_dashboard(request):
 
 @login_required
 def trend_dashboard(request):
+    # Check if user has a profile
+    if not hasattr(request.user, 'userprofile'):
+        messages.error(request, '❌ Your account does not have a user profile. Please contact admin or create a new account through signup.')
+        from django.contrib.auth import logout
+        logout(request)
+        return redirect('login')
     
     products = Product.objects.all()
     
@@ -1254,6 +1276,13 @@ def enhanced_simulation_update(request, products):
 
 @login_required
 def admin_dashboard(request):
+    # Check if user has a profile
+    if not hasattr(request.user, 'userprofile'):
+        messages.error(request, '❌ Your account does not have a user profile. Please contact admin or create a new account through signup.')
+        from django.contrib.auth import logout
+        logout(request)
+        return redirect('login')
+    
     print(f"🔧 DEBUG: Admin dashboard accessed by user: {request.user.username}")
     print(f"🔧 DEBUG: Request method: {request.method}")
     print(f"🔧 DEBUG: POST data: {dict(request.POST) if request.method == 'POST' else 'N/A'}")
@@ -1471,9 +1500,10 @@ Notification Details:
                     approved_quantity = int(approved_quantity)
                     product = order_request.product
                     
-                    # Check if enough stock is available
-                    if approved_quantity > product.total_stock:
-                        messages.error(request, f'❌ Not enough stock! Available: {product.total_stock} units, Requested: {approved_quantity} units')
+                    # Check if enough stock is available in COMPANY warehouse
+                    company_stock = product.get_company_stock()
+                    if approved_quantity > company_stock:
+                        messages.error(request, f'❌ Not enough stock in company warehouse! Available: {company_stock} units, Requested: {approved_quantity} units')
                         return redirect('admin_dashboard')
                     
                     # Update order request
@@ -1511,25 +1541,34 @@ Notification Details:
                     order_request.bill_generated = True
                     order_request.save()
                     
-                    # Deduct stock using FEFO logic
-                    remaining_quantity = approved_quantity
-                    stock_entries = ExpiryStock.objects.filter(
-                        product=product,
-                        quantity__gt=0
-                    ).order_by('expiry_date')
-                    
-                    for stock_entry in stock_entries:
-                        if remaining_quantity <= 0:
-                            break
+                    # Deduct stock from COMPANY warehouse using FEFO logic
+                    try:
+                        company_user = User.objects.get(username='company_stock')
+                        remaining_quantity = approved_quantity
+                        stock_entries = ExpiryStock.objects.filter(
+                            product=product,
+                            user=company_user,  # Only deduct from company stock
+                            quantity__gt=0
+                        ).order_by('expiry_date')
                         
-                        if stock_entry.quantity >= remaining_quantity:
-                            stock_entry.quantity -= remaining_quantity
-                            stock_entry.save()
-                            remaining_quantity = 0
-                        else:
-                            remaining_quantity -= stock_entry.quantity
-                            stock_entry.quantity = 0
-                            stock_entry.save()
+                        for stock_entry in stock_entries:
+                            if remaining_quantity <= 0:
+                                break
+                            
+                            if stock_entry.quantity >= remaining_quantity:
+                                stock_entry.quantity -= remaining_quantity
+                                stock_entry.save()
+                                remaining_quantity = 0
+                            else:
+                                remaining_quantity -= stock_entry.quantity
+                                stock_entry.quantity = 0
+                                stock_entry.save()
+                        
+                        if remaining_quantity > 0:
+                            messages.warning(request, f'⚠️ Only {approved_quantity - remaining_quantity} units available in company warehouse. {remaining_quantity} units short!')
+                    except User.DoesNotExist:
+                        messages.error(request, '❌ Company stock user not found! Please run setup_company_stock.py')
+                        return redirect('admin_dashboard')
                     
                     # Notify inventory user
                     Notification.objects.create(
@@ -1546,6 +1585,10 @@ Notification Details:
                         target_user_role='inventory',
                         product=product
                     )
+                    
+                    # Update trend score automatically
+                    from inventory.trend_calculator import update_product_trend_score
+                    new_score = update_product_trend_score(product)
                     
                     messages.success(request, f'✅ Product request approved! Sent {approved_quantity} units of {product.name}. Bill #{bill_number} generated automatically.')
                     return redirect('admin_dashboard')
@@ -1568,29 +1611,35 @@ Notification Details:
     orders = OrderQueue.objects.all().order_by('-created_at')
     
     # Count different order statuses
-    # Pending orders should only include orders created by admin that are still pending
+    # Pending orders: Orders that admin needs to review (requested by inventory, status='pending')
     pending_orders_count = OrderQueue.objects.filter(
         status='pending',
-        ordered_by__isnull=False  # Only count orders that were actually created by admin
+        requested_by__isnull=False  # Requested by inventory users
     ).count()
     
-    ordered_count = OrderQueue.objects.filter(status='ordered').count()
-    actual_received_count = OrderQueue.objects.filter(status='received').count()
+    # Orders Placed: All orders that inventory has requested (all statuses)
+    # This shows total orders placed by inventory team
+    ordered_count = OrderQueue.objects.filter(
+        requested_by__isnull=False  # All orders requested by inventory users
+    ).count()
     
-    # Count admin completed orders (orders marked as seen by admin)
-    # This should be the main "completed" count since admin wants their actions to be counted
+    # Completed Orders: Orders that admin has approved/processed (not pending or cancelled)
+    # This shows how many orders admin has completed/fulfilled
+    completed_orders_count = OrderQueue.objects.filter(
+        requested_by__isnull=False,  # Orders from inventory
+        status__in=['approved', 'partially_fulfilled', 'shipped', 'delivered', 'completed']  # Admin has taken action
+    ).count()
+    
+    # Additional counts for detailed tracking
+    actual_received_count = OrderQueue.objects.filter(status='delivered').count()
     admin_seen_count = OrderQueue.objects.filter(message_received=True).count()
     
-    # For completed orders, we'll use admin seen count as the primary metric
-    # since the user wants admin actions to be counted in completed orders
-    completed_orders_count = admin_seen_count
-    
     print(f"🔧 DEBUG: Order counts:")
-    print(f"  - Pending (Admin Created): {pending_orders_count}")
-    print(f"  - Ordered: {ordered_count}")
-    print(f"  - Actually Received (Stock): {actual_received_count}")
-    print(f"  - Admin Seen (Admin Actions): {admin_seen_count}")
-    print(f"  - Completed Orders (Admin Actions): {completed_orders_count}")
+    print(f"  - Pending (Waiting for Admin): {pending_orders_count}")
+    print(f"  - Orders Placed (Total by Inventory): {ordered_count}")
+    print(f"  - Completed Orders (Approved by Admin): {completed_orders_count}")
+    print(f"  - Actually Delivered: {actual_received_count}")
+    print(f"  - Admin Seen: {admin_seen_count}")
     
     # Count conditions for dashboard stats
     overstock_count = sum(1 for item in stock_analysis if item['condition'] == 'Overstock')
@@ -1681,6 +1730,83 @@ Notification Details:
         # Product Requests from Inventory
         'product_requests': product_requests,
     }
+    
+    # Add Billing Management Data
+    from django.db.models import Sum, Count, Avg
+    from datetime import date
+    from collections import defaultdict
+    
+    # Get all bills
+    all_bills = SalesBill.objects.filter(
+        created_by__isnull=False
+    ).select_related('created_by__userprofile').prefetch_related('items').order_by('-created_at')
+    
+    # Get inventory users for filter (use different variable name to avoid conflict)
+    billing_inventory_users = User.objects.filter(userprofile__role='inventory')
+    
+    # Calculate summary statistics
+    total_bills_count = all_bills.count()
+    total_revenue = all_bills.aggregate(total=Sum('total_amount'))['total'] or 0
+    
+    # Today's bills
+    today = date.today()
+    today_bills = all_bills.filter(created_at__date=today)
+    today_bills_count = today_bills.count()
+    
+    # This month's bills
+    month_bills = all_bills.filter(
+        created_at__year=today.year,
+        created_at__month=today.month
+    )
+    month_bills_count = month_bills.count()
+    
+    # Get available months for filter
+    available_months = set()
+    for bill in all_bills:
+        month_str = bill.created_at.strftime('%Y-%m')
+        available_months.add(month_str)
+    available_months = sorted(available_months, reverse=True)
+    
+    # Calculate monthly summaries by store
+    monthly_summaries = []
+    monthly_data = defaultdict(lambda: defaultdict(lambda: {'count': 0, 'total': 0}))
+    
+    for bill in all_bills:
+        if bill.created_by:
+            try:
+                store_name = bill.created_by.userprofile.full_identity
+            except:
+                # If user has no profile, use username
+                store_name = bill.created_by.username
+            month = bill.created_at.strftime('%B %Y')
+            monthly_data[store_name][month]['count'] += 1
+            monthly_data[store_name][month]['total'] += float(bill.total_amount)
+    
+    for store_name, months in monthly_data.items():
+        for month, data in months.items():
+            monthly_summaries.append({
+                'store_name': store_name,
+                'month': month,
+                'bill_count': data['count'],
+                'total_amount': data['total'],
+                'avg_amount': data['total'] / data['count'] if data['count'] > 0 else 0
+            })
+    
+    # Sort by month (newest first)
+    monthly_summaries.sort(key=lambda x: x['month'], reverse=True)
+    
+    # Add billing data to context
+    context.update({
+        'all_bills': all_bills,
+        'billing_inventory_users': billing_inventory_users,
+        'total_bills_count': total_bills_count,
+        'total_revenue': total_revenue,
+        'today_bills_count': today_bills_count,
+        'month_bills_count': month_bills_count,
+        'available_months': available_months,
+        'monthly_summaries': monthly_summaries,
+    })
+    
     return render(request, 'admin_dashboard.html', context)
 
 @login_required
@@ -2132,6 +2258,13 @@ def update_order_from_notification(request):
 
 @login_required
 def billing(request):
+    # Check if user has a profile
+    if not hasattr(request.user, 'userprofile'):
+        messages.error(request, '❌ Your account does not have a user profile. Please contact admin or create a new account through signup.')
+        from django.contrib.auth import logout
+        logout(request)
+        return redirect('login')
+    
     if request.method == 'POST':
         # Handle multi-product billing
         products_data = request.POST.get('products_data')
@@ -3056,3 +3189,50 @@ def get_user_profile(request):
         'success': False,
         'error': 'Invalid request method'
     })
+
+
+@login_required
+def get_bill_details_api(request):
+    """API endpoint to get bill details for modal display in admin dashboard"""
+    bill_number = request.GET.get('bill_number')
+    
+    if not bill_number:
+        return JsonResponse({'success': False, 'error': 'Bill number is required'})
+    
+    try:
+        bill = SalesBill.objects.get(bill_number=bill_number)
+        
+        # Get bill items
+        items = []
+        for item in bill.items.all():
+            items.append({
+                'product_name': item.product.name,
+                'quantity': item.quantity,
+                'price': float(item.price),
+                'total': float(item.total)
+            })
+        
+        # Get store information
+        try:
+            store_name = bill.created_by.userprofile.full_identity if bill.created_by else 'N/A'
+            store_location = bill.created_by.userprofile.store_location if bill.created_by and bill.created_by.userprofile.store_location else 'N/A'
+        except:
+            # If user has no profile, use username
+            store_name = bill.created_by.username if bill.created_by else 'N/A'
+            store_location = 'N/A'
+        
+        bill_data = {
+            'bill_number': bill.bill_number,
+            'created_at': bill.created_at.strftime('%d %B %Y, %I:%M %p'),
+            'total_amount': float(bill.total_amount),
+            'store_name': store_name,
+            'store_location': store_location,
+            'items': items
+        }
+        
+        return JsonResponse({'success': True, 'bill': bill_data})
+        
+    except SalesBill.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Bill not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
