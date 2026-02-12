@@ -1,0 +1,408 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Ledger - {{ user.username }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .ledger-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .ledger-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .ledger-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .ledger-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        .user-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .user-info h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        .offline-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .transaction-list {
+            padding: 20px;
+        }
+        
+        /* Bill List View Styles */
+        .bill-list-item {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: white;
+        }
+        .bill-list-item:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+            border-color: #667eea;
+        }
+        .bill-list-item.highlighted-bill {
+            border: 2px solid #667eea;
+            background: #f0f4ff;
+        }
+        .bill-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .bill-list-number {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .bill-list-amount {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #28a745;
+        }
+        .bill-list-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        
+        /* Bill Detail View Styles */
+        .bill-detail-view {
+            display: none;
+            animation: slideIn 0.3s ease;
+        }
+        .bill-detail-view.active {
+            display: block;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .back-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+        .back-button:hover {
+            background: #5568d3;
+            color: white;
+            transform: translateX(-5px);
+        }
+        .bill-detail-card {
+            border: 2px solid #667eea;
+            border-radius: 15px;
+            padding: 25px;
+            background: #f8f9fa;
+        }
+        .bill-detail-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .bill-detail-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        .bill-detail-header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+        }
+        .product-table {
+            width: 100%;
+            margin: 20px 0;
+            border-collapse: collapse;
+        }
+        .product-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .product-table td {
+            padding: 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .product-table tr:hover {
+            background: #f8f9fa;
+        }
+        .product-table tr:last-child td {
+            border-bottom: none;
+        }
+        .bill-summary {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 2px solid #28a745;
+        }
+        .bill-summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 1.1rem;
+        }
+        .bill-summary-total {
+            border-top: 2px solid #28a745;
+            margin-top: 10px;
+            padding-top: 10px;
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: #28a745;
+        }
+        .no-transactions {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6c757d;
+        }
+        .no-transactions i {
+            font-size: 4rem;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+        .footer-info {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="ledger-container">
+        <!-- Header -->
+        <div class="ledger-header">
+            <h1><i class="fas fa-book"></i> Digital Ledger</h1>
+            <p>Offline Transaction History</p>
+        </div>
+
+        <!-- User Info -->
+        <div class="user-info">
+            <h3><i class="fas fa-user-circle"></i> {{ user_profile.display_name }}</h3>
+            <p class="mb-2">
+                <strong>Store:</strong> {{ user_profile.store_name|default:"N/A" }}<br>
+                <strong>Location:</strong> {{ user_profile.store_location|default:"N/A" }}<br>
+                <strong>Role:</strong> {{ user_profile.get_role_display }}
+            </p>
+            <span class="offline-badge">
+                <i class="fas fa-wifi"></i> Offline Mode Active
+            </span>
+            {% if last_accessed %}
+            <p class="mt-2 mb-0" style="font-size: 0.85rem;">
+                <i class="fas fa-clock"></i> Last accessed: {{ last_accessed|date:"d M Y, h:i A" }}
+            </p>
+            {% endif %}
+        </div>
+
+        <!-- Transaction History -->
+        <div class="transaction-list">
+            <!-- Bill List View -->
+            <div id="bill-list-view">
+                <h4 class="mb-4"><i class="fas fa-receipt"></i> All Bills ({{ transaction_history|length }})</h4>
+                
+                {% if transaction_history %}
+                    {% for transaction in transaction_history %}
+                    <div class="bill-list-item {% if transaction.is_highlighted %}highlighted-bill{% endif %}" 
+                         onclick="showBillDetail('{{ transaction.bill_number }}')">
+                        <div class="bill-list-header">
+                            <div class="bill-list-number">
+                                <i class="fas fa-file-invoice"></i> {{ transaction.bill_number }}
+                                {% if transaction.is_highlighted %}
+                                <span class="badge bg-primary ms-2">Scanned Bill</span>
+                                {% endif %}
+                            </div>
+                            <div class="bill-list-amount">
+                                ₹{{ transaction.total_amount }}
+                            </div>
+                        </div>
+                        <div class="bill-list-meta">
+                            <span>
+                                <i class="fas fa-calendar-alt"></i> {{ transaction.created_at|date:"d M Y, h:i A" }}
+                            </span>
+                            <span>
+                                <i class="fas fa-box"></i> {{ transaction.items|length }} item{{ transaction.items|length|pluralize }}
+                            </span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="no-transactions">
+                        <i class="fas fa-inbox"></i>
+                        <h5>No Bills Found</h5>
+                        <p>No transaction history available for this account.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- Bill Detail Views (Hidden by default) -->
+            {% for transaction in transaction_history %}
+            <div id="bill-detail-{{ transaction.bill_number }}" class="bill-detail-view">
+                <a href="javascript:void(0)" onclick="showBillList()" class="back-button">
+                    <i class="fas fa-arrow-left"></i> Back to All Bills
+                </a>
+                
+                <div class="bill-detail-card">
+                    <div class="bill-detail-header">
+                        <h2><i class="fas fa-file-invoice"></i> {{ transaction.bill_number }}</h2>
+                        <p><i class="fas fa-calendar-alt"></i> {{ transaction.created_at|date:"d M Y, h:i A" }}</p>
+                    </div>
+
+                    <h5 class="mb-3"><i class="fas fa-shopping-cart"></i> Products Sold</h5>
+                    <table class="product-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Product Name</th>
+                                <th>Quantity</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in transaction.items %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td><strong>{{ item.product_name }}</strong></td>
+                                <td>{{ item.quantity }}</td>
+                                <td>₹{{ item.price }}</td>
+                                <td><strong>₹{{ item.total }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+
+                    <div class="bill-summary">
+                        <div class="bill-summary-row">
+                            <span>Total Items:</span>
+                            <span><strong>{{ transaction.items|length }}</strong></span>
+                        </div>
+                        <div class="bill-summary-row">
+                            <span>Total Quantity:</span>
+                            <span><strong>{{ transaction.total_quantity }}</strong></span>
+                        </div>
+                        <div class="bill-summary-row bill-summary-total">
+                            <span>Grand Total:</span>
+                            <span>₹{{ transaction.total_amount }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Footer -->
+        <div class="footer-info">
+            <p class="mb-0">
+                <i class="fas fa-shield-alt"></i> Secure Digital Ledger<br>
+                This page works offline and can be accessed anytime via QR code
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Show bill detail view
+        function showBillDetail(billNumber) {
+            // Hide bill list
+            document.getElementById('bill-list-view').style.display = 'none';
+            
+            // Hide all bill details
+            const allDetails = document.querySelectorAll('.bill-detail-view');
+            allDetails.forEach(detail => {
+                detail.classList.remove('active');
+            });
+            
+            // Show selected bill detail
+            const selectedDetail = document.getElementById('bill-detail-' + billNumber);
+            if (selectedDetail) {
+                selectedDetail.classList.add('active');
+            }
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Show bill list view
+        function showBillList() {
+            // Hide all bill details
+            const allDetails = document.querySelectorAll('.bill-detail-view');
+            allDetails.forEach(detail => {
+                detail.classList.remove('active');
+            });
+            
+            // Show bill list
+            document.getElementById('bill-list-view').style.display = 'block';
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        // Auto-open highlighted bill if exists
+        document.addEventListener('DOMContentLoaded', function() {
+            const highlightedBill = document.querySelector('.bill-list-item.highlighted-bill');
+            if (highlightedBill) {
+                // Get bill number from the highlighted bill
+                const billNumberElement = highlightedBill.querySelector('.bill-list-number');
+                if (billNumberElement) {
+                    const billText = billNumberElement.textContent.trim();
+                    const billNumber = billText.split(' ')[1]; // Extract bill number
+                    if (billNumber) {
+                        // Auto-open the highlighted bill after a short delay
+                        setTimeout(() => {
+                            showBillDetail(billNumber);
+                        }, 500);
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

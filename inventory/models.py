@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import date
+import uuid
 
 class UserProfile(models.Model):
     ROLE_CHOICES = [
@@ -358,3 +359,38 @@ class OrderStatusHistory(models.Model):
     
     def __str__(self):
         return f"Order #{self.order.id} - {self.status} at {self.created_at}"
+
+
+class QRToken(models.Model):
+    """
+    Offline Recovery Feature: Secure QR token for customer transaction history
+    Adapted from LedgerX project for Neuro Stock
+    """
+    # Link to UserProfile (customer/user in Neuro Stock)
+    user_profile = models.OneToOneField(UserProfile, on_delete=models.CASCADE, related_name='qr_token')
+    
+    # Secure token for QR code generation
+    secure_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Token status
+    is_active = models.BooleanField(default=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_accessed = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"QR Token for {self.user_profile.user.username} - {self.secure_token}"
+    
+    def get_qr_url(self):
+        """Generate the offline recovery URL for QR code"""
+        from django.urls import reverse
+        return reverse('offline_ledger', kwargs={'token': str(self.secure_token)})
+    
+    def mark_accessed(self):
+        """Update last accessed timestamp"""
+        self.last_accessed = timezone.now()
+        self.save(update_fields=['last_accessed'])

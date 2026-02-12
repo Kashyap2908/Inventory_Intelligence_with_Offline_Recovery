@@ -1,0 +1,286 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bill {{ bill.bill_number }} - NeuroStock</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .bill-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .bill-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .bill-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .bill-header .bill-number {
+            font-size: 1.5rem;
+            margin-top: 10px;
+            opacity: 0.95;
+        }
+        .store-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .store-info h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+            font-size: 1.2rem;
+        }
+        .store-info p {
+            margin: 5px 0;
+            color: #6c757d;
+        }
+        .bill-meta {
+            background: white;
+            padding: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .bill-meta-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #dee2e6;
+        }
+        .bill-meta-item:last-child {
+            border-bottom: none;
+        }
+        .bill-meta-label {
+            font-weight: 600;
+            color: #495057;
+        }
+        .bill-meta-value {
+            color: #6c757d;
+        }
+        .products-section {
+            padding: 30px;
+        }
+        .products-section h4 {
+            margin-bottom: 20px;
+            color: #495057;
+            font-weight: 700;
+        }
+        .product-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .product-table thead {
+            background: #667eea;
+            color: white;
+        }
+        .product-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        .product-table td {
+            padding: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .product-table tbody tr:hover {
+            background: #f8f9fa;
+        }
+        .product-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .product-name {
+            font-weight: 600;
+            color: #495057;
+        }
+        .bill-summary {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 1.1rem;
+        }
+        .summary-total {
+            border-top: 2px solid rgba(255,255,255,0.3);
+            margin-top: 10px;
+            padding-top: 15px;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        .qr-info {
+            background: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            border-top: 2px solid #e9ecef;
+        }
+        .qr-info p {
+            margin: 5px 0;
+            color: #6c757d;
+        }
+        .offline-badge {
+            display: inline-block;
+            background: #28a745;
+            color: white;
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-top: 10px;
+        }
+        .print-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1rem;
+            font-weight: 600;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .print-button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        }
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .bill-container {
+                box-shadow: none;
+                border-radius: 0;
+            }
+            .print-button {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bill-container">
+        <!-- Header -->
+        <div class="bill-header">
+            <h1><i class="fas fa-file-invoice"></i> Bill Details</h1>
+            <div class="bill-number">{{ bill.bill_number }}</div>
+        </div>
+
+        <!-- Store Info -->
+        {% if user_profile %}
+        <div class="store-info">
+            <h3><i class="fas fa-store"></i> Store Information</h3>
+            <p><strong>Store:</strong> {{ user_profile.store_name|default:"N/A" }}</p>
+            <p><strong>Location:</strong> {{ user_profile.store_location|default:"N/A" }}</p>
+            <p><strong>Seller:</strong> {{ user.first_name|default:user.username }}</p>
+        </div>
+        {% endif %}
+
+        <!-- Bill Meta -->
+        <div class="bill-meta">
+            <div class="bill-meta-item">
+                <span class="bill-meta-label"><i class="fas fa-hashtag"></i> Bill Number:</span>
+                <span class="bill-meta-value">{{ bill.bill_number }}</span>
+            </div>
+            <div class="bill-meta-item">
+                <span class="bill-meta-label"><i class="fas fa-calendar-alt"></i> Date & Time:</span>
+                <span class="bill-meta-value">{{ bill.created_at|date:"d M Y, h:i A" }}</span>
+            </div>
+            <div class="bill-meta-item">
+                <span class="bill-meta-label"><i class="fas fa-box"></i> Total Items:</span>
+                <span class="bill-meta-value">{{ bill.items|length }}</span>
+            </div>
+            <div class="bill-meta-item">
+                <span class="bill-meta-label"><i class="fas fa-cubes"></i> Total Quantity:</span>
+                <span class="bill-meta-value">{{ bill.total_quantity }}</span>
+            </div>
+        </div>
+
+        <!-- Products Section -->
+        <div class="products-section">
+            <h4><i class="fas fa-shopping-cart"></i> Products Sold</h4>
+            
+            <table class="product-table">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">#</th>
+                        <th>Product Name</th>
+                        <th style="width: 100px; text-align: center;">Quantity</th>
+                        <th style="width: 120px; text-align: right;">Unit Price</th>
+                        <th style="width: 120px; text-align: right;">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in bill.items %}
+                    <tr>
+                        <td style="text-align: center;">{{ forloop.counter }}</td>
+                        <td class="product-name">{{ item.product_name }}</td>
+                        <td style="text-align: center;">{{ item.quantity }}</td>
+                        <td style="text-align: right;">₹{{ item.price }}</td>
+                        <td style="text-align: right;"><strong>₹{{ item.total }}</strong></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Bill Summary -->
+            <div class="bill-summary">
+                <div class="summary-row">
+                    <span><i class="fas fa-box"></i> Total Items:</span>
+                    <span><strong>{{ bill.items|length }}</strong></span>
+                </div>
+                <div class="summary-row">
+                    <span><i class="fas fa-cubes"></i> Total Quantity:</span>
+                    <span><strong>{{ bill.total_quantity }}</strong></span>
+                </div>
+                <div class="summary-row summary-total">
+                    <span><i class="fas fa-rupee-sign"></i> Grand Total:</span>
+                    <span>₹{{ bill.total_amount }}</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- QR Info -->
+        <div class="qr-info">
+            <p><i class="fas fa-qrcode"></i> <strong>This bill was accessed via QR code</strong></p>
+            <p>Scan the QR code on your printed bill to view this information anytime</p>
+            <span class="offline-badge">
+                <i class="fas fa-wifi"></i> Works Offline
+            </span>
+        </div>
+    </div>
+
+    <!-- Print Button -->
+    <button class="print-button" onclick="window.print()">
+        <i class="fas fa-print"></i> Print Bill
+    </button>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

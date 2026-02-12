@@ -28,4 +28,12 @@ urlpatterns = [
     path('delete-team-member/', views.delete_team_member, name='delete_team_member'),
     path('get-user-profile/', views.get_user_profile, name='get_user_profile'),
     path('test-eye-icon/', views.test_eye_icon, name='test_eye_icon'),  # Test page for eye icon
+    
+    # Offline Recovery Feature (from LedgerX)
+    path('ledger/<uuid:token>/', views.offline_ledger, name='offline_ledger'),  # Offline ledger access via QR
+    path('generate-qr/', views.generate_qr_token, name='generate_qr_token'),  # Generate QR token
+    path('bill/<int:bill_id>/qr-data/', views.get_bill_qr_data, name='get_bill_qr_data'),  # Get QR data for bill
+    path('bill/<str:bill_number>/qr-image/', views.get_bill_qr_image, name='get_bill_qr_image'),  # Get QR image for bill
+    path('qr-test/', views.qr_test_page, name='qr_test_page'),  # QR system test page
+    path('bill/<str:bill_number>/', views.individual_bill_view, name='individual_bill_view'),  # Individual bill view via QR
 ]

@@ -2295,6 +2295,11 @@ def billing(request):
                     created_by=request.user  # Track who created the bill
                 )
                 
+                # Auto-generate QR token for user if not exists
+                from .models import QRToken
+                user_profile = request.user.userprofile
+                qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+                
                 # Process each product
                 insufficient_stock_products = []
                 successful_products = []
@@ -2408,6 +2413,11 @@ def billing(request):
                         total_amount=product.new_price * Decimal(str(quantity)),
                         created_by=request.user  # Track who created the bill
                     )
+                    
+                    # Auto-generate QR token for user if not exists
+                    from .models import QRToken
+                    user_profile = request.user.userprofile
+                    qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
                     
                     SalesBillItem.objects.create(
                         bill=bill,
@@ -3236,3 +3246,261 @@ def get_bill_details_api(request):
         return JsonResponse({'success': False, 'error': 'Bill not found'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+# ============================================
+# OFFLINE RECOVERY FEATURE (from LedgerX)
+# ============================================
+
+def offline_ledger(request, token):
+    """
+    Offline Recovery View: Display transaction history using QR token
+    Adapted from LedgerX for Neuro Stock Project
+    """
+    try:
+        from .models import QRToken
+        
+        # Find the QR token
+        qr_token = get_object_or_404(QRToken, secure_token=token, is_active=True)
+        
+        # Mark token as accessed
+        qr_token.mark_accessed()
+        
+        # Get user profile and transaction history
+        user_profile = qr_token.user_profile
+        user = user_profile.user
+        
+        # Check if a specific bill is requested
+        requested_bill_number = request.GET.get('bill')
+        highlighted_bill = None
+        
+        # Get all bills created by this user
+        bills = SalesBill.objects.filter(created_by=user).order_by('-created_at')[:50]
+        
+        # Get bill details with items
+        transaction_history = []
+        for bill in bills:
+            items = []
+            total_quantity = 0
+            for item in bill.items.all():
+                items.append({
+                    'product_name': item.product.name,
+                    'quantity': item.quantity,
+                    'price': item.price,
+                    'total': item.total
+                })
+                total_quantity += item.quantity
+            
+            bill_data = {
+                'bill_number': bill.bill_number,
+                'created_at': bill.created_at,
+                'total_amount': bill.total_amount,
+                'total_quantity': total_quantity,
+                'items': items,
+                'is_highlighted': bill.bill_number == requested_bill_number
+            }
+            
+            if bill.bill_number == requested_bill_number:
+                highlighted_bill = bill_data
+            
+            transaction_history.append(bill_data)
+        
+        context = {
+            'user_profile': user_profile,
+            'user': user,
+            'transaction_history': transaction_history,
+            'highlighted_bill': highlighted_bill,
+            'token': token,
+            'last_accessed': qr_token.last_accessed,
+            'is_offline_mode': True
+        }
+        
+        return render(request, 'offline_ledger.html', context)
+        
+    except QRToken.DoesNotExist:
+        messages.error(request, '❌ Invalid or expired QR token')
+        return redirect('login')
+    except Exception as e:
+        messages.error(request, f'❌ Error accessing ledger: {str(e)}')
+        return redirect('login')
+
+
+@login_required
+def generate_qr_token(request):
+    """
+    Generate or retrieve QR token for the logged-in user
+    """
+    try:
+        from .models import QRToken
+        
+        # Get or create QR token for user's profile
+        user_profile = request.user.userprofile
+        qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+        
+        # Generate QR code URL
+        qr_url = request.build_absolute_uri(qr_token.get_qr_url())
+        
+        if created:
+            messages.success(request, '✅ Digital Ledger QR code generated successfully!')
+        
+        context = {
+            'qr_token': qr_token,
+            'qr_url': qr_url,
+            'qr_data': qr_url  # This will be used to generate QR code
+        }
+        
+        return render(request, 'qr_token_display.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'❌ Error generating QR token: {str(e)}')
+        return redirect('inventory_dashboard')
+
+
+@login_required
+def get_bill_qr_data(request, bill_id):
+    """
+    API endpoint to get QR data for a specific bill
+    Returns QR code data that includes offline ledger link
+    """
+    try:
+        from .models import QRToken
+        
+        bill = get_object_or_404(SalesBill, id=bill_id, created_by=request.user)
+        
+        # Get or create QR token for user
+        user_profile = request.user.userprofile
+        qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+        
+        # Generate offline ledger URL
+        qr_url = request.build_absolute_uri(qr_token.get_qr_url())
+        
+        return JsonResponse({
+            'success': True,
+            'qr_data': qr_url,
+            'bill_number': bill.bill_number,
+            'token': str(qr_token.secure_token)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        })
+
+
+@login_required
+def get_bill_qr_image(request, bill_number):
+    """
+    Generate QR code image for a specific bill
+    Returns a PNG image that can be embedded in bills
+    """
+    try:
+        import qrcode
+        from io import BytesIO
+        from django.http import HttpResponse
+        from .models import QRToken
+        
+        # Get the bill
+        bill = get_object_or_404(SalesBill, bill_number=bill_number, created_by=request.user)
+        
+        # Get or create QR token for user
+        user_profile = request.user.userprofile
+        qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+        
+        # Generate offline ledger URL with bill reference
+        qr_url = request.build_absolute_uri(qr_token.get_qr_url())
+        qr_url += f"?bill={bill.bill_number}"  # Add bill number as query parameter
+        
+        # Generate QR code
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+        
+        # Create image
+        img = qr.make_image(fill_color="black", back_color="white")
+        
+        # Save to BytesIO
+        buffer = BytesIO()
+        img.save(buffer, format='PNG')
+        buffer.seek(0)
+        
+        # Return as HTTP response
+        response = HttpResponse(buffer.getvalue(), content_type='image/png')
+        response['Content-Disposition'] = f'inline; filename="bill_{bill_number}_qr.png"'
+        return response
+        
+    except ImportError:
+        # If qrcode library is not installed
+        return JsonResponse({
+            'success': False,
+            'error': 'QR code library not installed. Run: pip install qrcode[pil]'
+        }, status=500)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=400)
+
+
+@login_required
+def qr_test_page(request):
+    """
+    Test page for QR code system verification
+    """
+    return render(request, 'qr_test_page.html')
+
+
+def individual_bill_view(request, bill_number):
+    """
+    Public view for individual bill details via QR code
+    Shows ONLY the specific bill's information
+    No login required - accessible via QR code
+    """
+    try:
+        # Get the bill by bill number
+        bill = get_object_or_404(SalesBill, bill_number=bill_number)
+        
+        # Get bill items with product details
+        items = []
+        total_quantity = 0
+        for item in bill.items.all():
+            items.append({
+                'product_name': item.product.name,
+                'quantity': item.quantity,
+                'price': item.price,
+                'total': item.total
+            })
+            total_quantity += item.quantity
+        
+        # Get user/store information
+        user = bill.created_by
+        user_profile = user.userprofile if hasattr(user, 'userprofile') else None
+        
+        bill_data = {
+            'bill_number': bill.bill_number,
+            'created_at': bill.created_at,
+            'total_amount': bill.total_amount,
+            'total_quantity': total_quantity,
+            'items': items,
+        }
+        
+        context = {
+            'bill': bill_data,
+            'user_profile': user_profile,
+            'user': user,
+            'is_individual_bill': True
+        }
+        
+        return render(request, 'individual_bill.html', context)
+        
+    except SalesBill.DoesNotExist:
+        messages.error(request, '❌ Bill not found')
+        return redirect('login')
+    except Exception as e:
+        messages.error(request, f'❌ Error accessing bill: {str(e)}')
+        return redirect('login')

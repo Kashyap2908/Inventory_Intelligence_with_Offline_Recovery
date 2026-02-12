@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}QR System Test{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">🔍 QR Code System - Test & Verification</h1>
+            
+            <!-- Status Card -->
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">✅ System Status</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Your QR Token:</h6>
+                            {% if user.userprofile.qr_token %}
+                                <p class="text-success">✓ QR Token exists</p>
+                                <p><strong>Token ID:</strong><br>
+                                <code>{{ user.userprofile.qr_token.secure_token }}</code></p>
+                                <p><strong>Status:</strong> 
+                                    {% if user.userprofile.qr_token.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Inactive</span>
+                                    {% endif %}
+                                </p>
+                            {% else %}
+                                <p class="text-warning">⚠ No QR token yet - will be created on first bill</p>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>User Information:</h6>
+                            <p><strong>Username:</strong> {{ user.username }}</p>
+                            <p><strong>Role:</strong> {{ user.userprofile.get_role_display }}</p>
+                            {% if user.userprofile.store_name %}
+                            <p><strong>Store:</strong> {{ user.userprofile.store_name }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Links -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">🧪 Test Links</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{% url 'generate_qr_token' %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">1. Generate QR Code Page</h6>
+                                <small class="text-muted">View & Print</small>
+                            </div>
+                            <p class="mb-1">View your Digital Ledger QR code and print it</p>
+                            <small class="text-muted">URL: /generate-qr/</small>
+                        </a>
+
+                        {% if user.userprofile.qr_token %}
+                        <a href="/ledger/{{ user.userprofile.qr_token.secure_token }}/" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">2. Offline Ledger (All Bills)</h6>
+                                <small class="text-muted">No Login Required</small>
+                            </div>
+                            <p class="mb-1">View your complete transaction history</p>
+                            <small class="text-muted">URL: /ledger/{{ user.userprofile.qr_token.secure_token }}/</small>
+                        </a>
+                        {% endif %}
+
+                        <a href="{% url 'billing' %}" class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">3. Create Test Bill</h6>
+                                <small class="text-muted">With QR Code</small>
+                            </div>
+                            <p class="mb-1">Create a bill and print it to see QR code</p>
+                            <small class="text-muted">URL: /billing/</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">📋 How to Test</h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li class="mb-3">
+                            <strong>View Your QR Code:</strong>
+                            <ul>
+                                <li>Click "Generate QR Code Page" above</li>
+                                <li>You'll see a QR code that you can print</li>
+                                <li>This QR code links to your transaction history</li>
+                            </ul>
+                        </li>
+                        <li class="mb-3">
+                            <strong>Create a Bill:</strong>
+                            <ul>
+                                <li>Click "Create Test Bill" above</li>
+                                <li>Add any product and create a bill</li>
+                                <li>Click "View Details" on the bill</li>
+                                <li>Click "Print Bill"</li>
+                            </ul>
+                        </li>
+                        <li class="mb-3">
+                            <strong>Check QR Code on Bill:</strong>
+                            <ul>
+                                <li>In the print preview, scroll to the bottom</li>
+                                <li>You should see a section: "📱 Scan for Bill Details & Transaction History"</li>
+                                <li>QR code should be visible</li>
+                                <li>Bill number should be shown below QR code</li>
+                            </ul>
+                        </li>
+                        <li class="mb-3">
+                            <strong>Scan QR Code:</strong>
+                            <ul>
+                                <li>Use your phone camera or QR scanner app</li>
+                                <li>Scan the QR code from the printed bill</li>
+                                <li>It should open the offline ledger</li>
+                                <li>The specific bill should be highlighted</li>
+                            </ul>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Features -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">✨ QR Code Features</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>What's Included:</h6>
+                            <ul>
+                                <li>✅ Automatic QR generation on bills</li>
+                                <li>✅ Bill-specific highlighting</li>
+                                <li>✅ Offline transaction history</li>
+                                <li>✅ No login required</li>
+                                <li>✅ Mobile-friendly display</li>
+                                <li>✅ Last 50 bills accessible</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Security:</h6>
+                            <ul>
+                                <li>🔒 Unique UUID token per user</li>
+                                <li>🔒 Read-only access</li>
+                                <li>🔒 User-specific data only</li>
+                                <li>🔒 Can be deactivated</li>
+                                <li>🔒 Access tracking</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">⚡ Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group" role="group">
+                        <a href="{% url 'generate_qr_token' %}" class="btn btn-primary">
+                            <i class="fas fa-qrcode"></i> View My QR Code
+                        </a>
+                        <a href="{% url 'billing' %}" class="btn btn-success">
+                            <i class="fas fa-receipt"></i> Create Bill
+                        </a>
+                        {% if user.userprofile.qr_token %}
+                        <a href="/ledger/{{ user.userprofile.qr_token.secure_token }}/" class="btn btn-info" target="_blank">
+                            <i class="fas fa-book"></i> View Ledger
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'inventory_dashboard' %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Digital Ledger QR Code{% endblock %}
+
+{% block extra_css %}
+<style>
+    .qr-container {
+        max-width: 600px;
+        margin: 50px auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        padding: 40px;
+        text-align: center;
+    }
+    .qr-header {
+        margin-bottom: 30px;
+    }
+    .qr-header h2 {
+        color: #667eea;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+    .qr-header p {
+        color: #6c757d;
+        font-size: 1rem;
+    }
+    .qr-code-wrapper {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 10px;
+        margin: 30px 0;
+    }
+    #qrcode {
+        display: inline-block;
+    }
+    .qr-info {
+        background: #e7f3ff;
+        border-left: 4px solid #667eea;
+        padding: 20px;
+        border-radius: 5px;
+        text-align: left;
+        margin-top: 30px;
+    }
+    .qr-info h5 {
+        color: #667eea;
+        margin-bottom: 15px;
+    }
+    .qr-info ul {
+        margin: 0;
+        padding-left: 20px;
+    }
+    .qr-info li {
+        margin-bottom: 10px;
+        color: #495057;
+    }
+    .btn-print {
+        margin-top: 20px;
+        padding: 12px 30px;
+        font-size: 1.1rem;
+    }
+    .token-info {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 20px;
+        font-family: monospace;
+        font-size: 0.9rem;
+        color: #6c757d;
+        word-break: break-all;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="qr-container">
+    <div class="qr-header">
+        <h2><i class="fas fa-qrcode"></i> Your Digital Ledger QR Code</h2>
+        <p>Scan this QR code to access your transaction history offline</p>
+    </div>
+
+    <div class="qr-code-wrapper">
+        <div id="qrcode"></div>
+    </div>
+
+    <div class="token-info">
+        <strong>Token ID:</strong> {{ qr_token.secure_token }}
+    </div>
+
+    <button class="btn btn-primary btn-print" onclick="window.print()">
+        <i class="fas fa-print"></i> Print QR Code
+    </button>
+
+    <div class="qr-info">
+        <h5><i class="fas fa-info-circle"></i> How to Use</h5>
+        <ul>
+            <li><strong>Print this QR code</strong> and attach it to your bills or receipts</li>
+            <li><strong>Customers can scan</strong> the QR code to view their transaction history</li>
+            <li><strong>Works offline</strong> - No internet connection required after initial load</li>
+            <li><strong>Secure access</strong> - Each QR code is unique and encrypted</li>
+            <li><strong>Always accessible</strong> - Transaction history available 24/7</li>
+        </ul>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'inventory_dashboard' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- QR Code Generation Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+    // Generate QR code
+    var qrcode = new QRCode(document.getElementById("qrcode"), {
+        text: "{{ qr_data }}",
+        width: 256,
+        height: 256,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+</script>
+{% endblock %}
