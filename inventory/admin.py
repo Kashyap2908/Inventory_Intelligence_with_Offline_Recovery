@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Product, ExpiryStock, OrderQueue, SalesBill, SalesBillItem, UserProfile, Notification
+from .models import Product, ExpiryStock, OrderQueue, SalesBill, SalesBillItem, UserProfile, Notification, ShopOwner, RestockOrder
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
@@ -44,3 +44,17 @@ class NotificationAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('product')
+
+
+@admin.register(ShopOwner)
+class ShopOwnerAdmin(admin.ModelAdmin):
+    list_display = ['name', 'shop_name', 'phone_number', 'email', 'created_at']
+    search_fields = ['name', 'shop_name', 'phone_number', 'email']
+    list_filter = ['created_at']
+
+@admin.register(RestockOrder)
+class RestockOrderAdmin(admin.ModelAdmin):
+    list_display = ['id', 'shop_owner', 'status', 'uploaded_at', 'processed_at', 'processed_by']
+    list_filter = ['status', 'uploaded_at', 'processed_at']
+    search_fields = ['shop_owner__name', 'shop_owner__shop_name']
+    readonly_fields = ['uploaded_at', 'processed_at']

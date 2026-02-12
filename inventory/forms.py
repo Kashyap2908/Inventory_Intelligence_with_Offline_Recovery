@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
-from .models import Product, ExpiryStock, OrderQueue, SalesBill, SalesBillItem, UserProfile
+from .models import Product, ExpiryStock, OrderQueue, SalesBill, SalesBillItem, UserProfile, ShopOwner, RestockOrder
 
 class SignUpForm(UserCreationForm):
     first_name = forms.CharField(
@@ -218,3 +218,38 @@ class StockReceiveForm(forms.Form):
                 )
         
         return cleaned_data
+
+class CSVBillingForm(forms.Form):
+    """Form for uploading CSV file to create bills"""
+    csv_file = forms.FileField(
+        label="Upload CSV File",
+        help_text="CSV should have columns: product_name, quantity",
+        widget=forms.FileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv'
+        })
+    )
+
+class ShopOwnerForm(forms.ModelForm):
+    """Form for adding shop owners"""
+    class Meta:
+        model = ShopOwner
+        fields = ['name', 'shop_name', 'phone_number', 'email', 'address']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Owner name'}),
+            'shop_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Shop name'}),
+            'phone_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email address'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Shop address'}),
+        }
+
+class RestockOrderForm(forms.ModelForm):
+    """Form for shop owners to upload restock orders"""
+    class Meta:
+        model = RestockOrder
+        fields = ['shop_owner', 'csv_file', 'notes']
+        widgets = {
+            'shop_owner': forms.Select(attrs={'class': 'form-select'}),
+            'csv_file': forms.FileInput(attrs={'class': 'form-control', 'accept': '.csv'}),
+            'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Optional notes'}),
+        }

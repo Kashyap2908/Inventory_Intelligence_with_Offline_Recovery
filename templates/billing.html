@@ -150,6 +150,78 @@
                     <div class="tab-pane fade show active" id="create-bill-panel" role="tabpanel">
                         <div class="row">
                             <div class="col-12">
+                                <!-- Shop Owner Order Processing -->
+                                <div class="card mb-4 border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-store me-2"></i>Process Shop Owner Restock Order</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Select a shop owner</strong> to automatically read their CSV file and create a bill.
+                                            <br>
+                                            <small>Shop owners have already uploaded their restock orders. Just select and process!</small>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-8">
+                                                <label class="form-label fw-bold">Select Shop Owner</label>
+                                                <select id="shop-owner-select" class="form-select">
+                                                    <option value="">-- Select Shop Owner --</option>
+                                                    {% for order in pending_orders %}
+                                                    <option value="{{ order.id }}" data-shop-name="{{ order.shop_owner.shop_name }}">
+                                                        {{ order.shop_owner.name }} - {{ order.shop_owner.shop_name }} 
+                                                        (Uploaded: {{ order.uploaded_at|date:"M d, H:i" }})
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                                <small class="text-muted">
+                                                    {% if pending_orders %}
+                                                        {{ pending_orders.count }} pending order(s) ready to process
+                                                    {% else %}
+                                                        No pending orders. Shop owners need to upload their CSV files first.
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" id="load-order-btn" class="btn btn-primary w-100" disabled>
+                                                    <i class="fas fa-download me-1"></i>Load Products from CSV
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="order-info" class="mt-3" style="display: none;">
+                                            <div class="alert alert-success">
+                                                <i class="fas fa-check-circle me-2"></i>
+                                                <strong>Ready to process!</strong> <span id="order-details"></span>
+                                            </div>
+                                        </div>
+                                        
+                                        {% if not pending_orders %}
+                                        <div class="mt-3">
+                                            <div class="alert alert-warning">
+                                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                                <strong>No pending orders found.</strong> 
+                                                Shop owners need to upload their CSV files first.
+                                                <a href="{% url 'manage_shop_owners' %}" class="alert-link">Upload orders here</a>
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                        
+                                        <div class="mt-3">
+                                            <a href="{% url 'manage_shop_owners' %}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-cog me-1"></i>Manage Shop Owners & Upload New Orders
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Entry Section -->
+                                <div class="alert alert-secondary">
+                                    <i class="fas fa-keyboard me-2"></i><strong>Or add products manually below:</strong>
+                                </div>
+
                                 <!-- Add Product Section -->
                                 <div class="card mb-4">
                                     <div class="card-header bg-primary text-white">
@@ -381,6 +453,163 @@
 
 {% block scripts %}
 <script>
+// Global variables for multi-product billing
+let selectedProducts = [];
+let currentProductData = null;
+let shopOwnerOrderData = null;
+
+// Shop Owner Order Processing
+document.addEventListener('DOMContentLoaded', function() {
+    const shopOwnerSelect = document.getElementById('shop-owner-select');
+    const loadOrderBtn = document.getElementById('load-order-btn');
+    const orderInfo = document.getElementById('order-info');
+    const orderDetails = document.getElementById('order-details');
+    
+    let currentOrderId = null;
+    
+    if (shopOwnerSelect) {
+        shopOwnerSelect.addEventListener('change', function() {
+            const orderId = this.value;
+            
+            if (!orderId) {
+                loadOrderBtn.disabled = true;
+                orderInfo.style.display = 'none';
+                currentOrderId = null;
+                return;
+            }
+            
+            // Get selected option details
+            const selectedOption = this.options[this.selectedIndex];
+            const shopName = selectedOption.getAttribute('data-shop-name');
+            
+            currentOrderId = orderId;
+            orderDetails.textContent = `CSV file ready for ${shopName}`;
+            orderInfo.style.display = 'block';
+            loadOrderBtn.disabled = false;
+        });
+    }
+    
+    if (loadOrderBtn) {
+        loadOrderBtn.addEventListener('click', function() {
+            if (!currentOrderId) {
+                alert('Please select a shop owner first');
+                return;
+            }
+            
+            // Show loading state
+            loadOrderBtn.disabled = true;
+            loadOrderBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading CSV...';
+            
+            // Fetch CSV data
+            fetch(`/load-shop-owner-csv/?order_id=${currentOrderId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('CSV Load Response:', data);
+                    
+                    if (data.success) {
+                        // Store order data for later bill creation
+                        shopOwnerOrderData = data;
+                        
+                        // Clear existing products
+                        selectedProducts = [];
+                        
+                        // Add products from CSV to selected products
+                        data.products.forEach(product => {
+                            if (!product.hasError) {
+                                selectedProducts.push({
+                                    id: product.id,
+                                    name: product.name,
+                                    quantity: product.quantity,
+                                    unitPrice: product.unitPrice,
+                                    total: product.total
+                                });
+                            }
+                        });
+                        
+                        // Update the table - call global function
+                        if (typeof window.updateSelectedProductsTable === 'function') {
+                            window.updateSelectedProductsTable();
+                            window.updateBillSummary();
+                        }
+                        
+                        // Show success message
+                        const validCount = data.products.filter(p => !p.hasError).length;
+                        const errorCount = data.products.filter(p => p.hasError).length;
+                        
+                        let message = `✅ Loaded ${validCount} product(s) from ${data.shop_owner.name}'s order`;
+                        if (errorCount > 0) {
+                            message += `\n⚠️ ${errorCount} product(s) had errors and were skipped`;
+                        }
+                        alert(message);
+                        
+                        // Show errors if any
+                        if (data.errors.length > 0) {
+                            console.log('CSV Errors:', data.errors);
+                        }
+                        
+                        // Scroll to selected products table
+                        document.getElementById('selected-products-table').scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        alert('Error loading CSV: ' + data.error);
+                        console.error('CSV Error:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                    alert('Error loading CSV file: ' + error.message + '. Check console for details.');
+                })
+                .finally(() => {
+                    // Reset button
+                    loadOrderBtn.disabled = false;
+                    loadOrderBtn.innerHTML = '<i class="fas fa-download me-1"></i>Load Products from CSV';
+                });
+        });
+    }
+    
+    // Modify the create bill button to handle shop owner orders
+    const originalCreateBill = document.getElementById('multi-product-form');
+    if (originalCreateBill) {
+        originalCreateBill.addEventListener('submit', function(e) {
+            // If we have shop owner order data, process it differently
+            if (shopOwnerOrderData && selectedProducts.length > 0) {
+                e.preventDefault();
+                
+                if (!confirm(`Create bill for ${shopOwnerOrderData.shop_owner.name} - ${shopOwnerOrderData.shop_owner.shop_name}?`)) {
+                    return;
+                }
+                
+                // Create form to process shop owner order
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/process-shop-owner-order/';
+                
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                
+                const orderInput = document.createElement('input');
+                orderInput.type = 'hidden';
+                orderInput.name = 'order_id';
+                orderInput.value = shopOwnerOrderData.order_id;
+                form.appendChild(orderInput);
+                
+                document.body.appendChild(form);
+                
+                // Show loading
+                const createBillBtn = document.getElementById('create-bill-btn');
+                createBillBtn.disabled = true;
+                createBillBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating Bill...';
+                
+                form.submit();
+            }
+            // Otherwise, let the normal form submission happen
+        });
+    }
+});
+
 // Real-time clock for billing
 function updateBillingTime() {
     const now = new Date();
@@ -414,9 +643,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Multi-Product Billing System
 document.addEventListener('DOMContentLoaded', function() {
-    // Multi-product billing variables
-    let selectedProducts = [];
-    let currentProductData = null;
+    // Use global variables instead of local ones
+    // let selectedProducts = [];  // Now global
+    // let currentProductData = null;  // Now global
     
     // DOM elements
     const productSearch = document.getElementById('product-search');
@@ -599,7 +828,15 @@ document.addEventListener('DOMContentLoaded', function() {
         showSuccess(`Added ${quantity} units of ${productName} to bill`);
     }
     
-    function updateSelectedProductsTable() {
+    // Expose functions globally for shop owner CSV loading
+    window.updateSelectedProductsTable = function() {
+        const selectedProductsBody = document.getElementById('selected-products-body');
+        
+        if (!selectedProductsBody) {
+            console.error('selectedProductsBody element not found');
+            return;
+        }
+        
         if (selectedProducts.length === 0) {
             selectedProductsBody.innerHTML = `
                 <tr id="no-products-row">
@@ -630,9 +867,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         selectedProductsBody.innerHTML = tableHTML;
-    }
+    };
     
-    function updateBillSummary() {
+    window.updateBillSummary = function() {
+        const totalItems = document.getElementById('total-items');
+        const grandTotal = document.getElementById('grand-total');
+        const billSummary = document.getElementById('bill-summary');
+        const createBillBtn = document.getElementById('create-bill-btn');
+        const productsDataInput = document.getElementById('products-data');
+        
         const totalItemsCount = selectedProducts.reduce((sum, product) => sum + product.quantity, 0);
         const grandTotalAmount = selectedProducts.reduce((sum, product) => sum + product.total, 0);
         
@@ -653,7 +896,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (productsDataInput) {
             productsDataInput.value = JSON.stringify(selectedProducts);
         }
-    }
+    };
     
     function clearProductInputs() {
         if (productSearch) productSearch.value = '';

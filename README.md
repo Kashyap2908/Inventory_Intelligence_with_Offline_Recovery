@@ -30,6 +30,7 @@ NeuroStock AI is a comprehensive inventory management system that combines tradi
 - **Responsive Design** - Mobile and desktop optimized
 - **Clean Interface** - Modern, professional UI/UX
 - **QR Code System** - Individual bill QR codes for instant access
+- **CSV Bulk Billing** - Upload shop owner restock orders via CSV
 
 ### 📱 **QR Code Features**
 - **Individual Bill QR Codes** - Each bill has unique QR code
@@ -86,6 +87,7 @@ python manage.py runserver
 - Expiry date monitoring
 - Notification management
 - FEFO stock deduction
+- CSV bulk billing for shop restock orders
 
 ### 📊 **Marketing Analyst**
 - AI trend analysis dashboard
@@ -178,6 +180,53 @@ python test_individual_bill_qr.py
 - **INDIVIDUAL_BILL_QR_COMPLETE.md** - Complete guide
 - **QR_QUICK_START.md** - Quick reference
 
+## 📄 **CSV Bulk Billing**
+
+### **Overview**
+The CSV Bulk Billing feature allows inventory managers to quickly create bills by uploading CSV files containing shop owner restock orders. This streamlines the process of handling bulk orders from multiple shop owners.
+
+### **How It Works**
+1. **Shop Owner Creates CSV** - Shop owner prepares a CSV file with products they want to restock
+2. **Upload to System** - Inventory manager uploads the CSV through the billing page
+3. **Automatic Processing** - System validates products, checks stock, and creates bill
+4. **Inventory Deduction** - Stock automatically deducted using FEFO method
+
+### **CSV Format**
+```csv
+product_name,quantity
+Rice,50
+Sugar,30
+Wheat Flour,40
+Cooking Oil,25
+```
+
+### **Features**
+- ✅ Bulk order processing in seconds
+- ✅ Automatic stock validation
+- ✅ FEFO inventory deduction
+- ✅ Error handling with detailed messages
+- ✅ Partial processing (valid products processed even if some fail)
+- ✅ Automatic bill generation
+- ✅ Notification system integration
+
+### **Usage**
+1. Go to Billing page
+2. Find "CSV Bulk Billing" section
+3. Upload CSV file with shop owner's order
+4. System creates bill and deducts inventory
+5. Review success/error messages
+
+### **Sample Files**
+- `sample_restock_order.csv` - Template for shop owners
+- `CSV_BILLING_GUIDE.md` - Complete documentation
+
+### **Benefits**
+- **Speed**: Process 50+ products in seconds vs manual entry
+- **Accuracy**: Reduces manual entry errors
+- **Automation**: Automatic inventory management
+- **Tracking**: All orders tracked with unique bill numbers
+- **Scalability**: Handle multiple shop owners efficiently
+
 ## 🔐 **Security Features**
 
 - **CSRF Protection** - All forms protected
@@ -241,6 +290,7 @@ NeuroStock AI
 
 ### **Billing & Sales**
 - ✅ Complete POS system
+- ✅ CSV bulk billing for shop restock orders
 - ✅ Real-time stock deduction
 - ✅ Sales reporting
 - ✅ Monthly analytics

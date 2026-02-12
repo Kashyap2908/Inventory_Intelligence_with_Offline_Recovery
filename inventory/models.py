@@ -394,3 +394,61 @@ class QRToken(models.Model):
         """Update last accessed timestamp"""
         self.last_accessed = timezone.now()
         self.save(update_fields=['last_accessed'])
+
+
+class ShopOwner(models.Model):
+    """
+    Shop Owner model to store shop owner information and their restock orders
+    """
+    name = models.CharField(max_length=200, help_text="Shop owner's name")
+    shop_name = models.CharField(max_length=200, help_text="Shop name")
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    address = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['name']
+    
+    def __str__(self):
+        return f"{self.name} - {self.shop_name}"
+    
+    @property
+    def pending_orders_count(self):
+        """Count of pending restock orders"""
+        return self.restock_orders.filter(status='pending').count()
+
+
+class RestockOrder(models.Model):
+    """
+    Restock Order model to store CSV files uploaded by shop owners
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processed', 'Processed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    
+    shop_owner = models.ForeignKey(ShopOwner, on_delete=models.CASCADE, related_name='restock_orders')
+    csv_file = models.FileField(upload_to='restock_orders/', help_text="CSV file with restock order")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    bill = models.ForeignKey(SalesBill, on_delete=models.SET_NULL, null=True, blank=True, related_name='restock_order')
+    notes = models.TextField(blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    processed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-uploaded_at']
+    
+    def __str__(self):
+        return f"Order #{self.id} - {self.shop_owner.name} ({self.status})"
+    
+    def mark_processed(self, bill, user):
+        """Mark order as processed"""
+        self.status = 'processed'
+        self.bill = bill
+        self.processed_by = user
+        self.processed_at = timezone.now()
+        self.save()

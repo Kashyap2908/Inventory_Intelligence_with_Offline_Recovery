@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+
+{% block title %}Manage Shop Owners - NeuroStock{% endblock %}
+
+{% block nav %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-brain me-2"></i>NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                            <i class="fas fa-warehouse me-1"></i>Inventory
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'billing' %}">
+                            <i class="fas fa-receipt me-1"></i>Billing
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'logout' %}">
+                            <i class="fas fa-sign-out-alt me-1"></i>Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-store me-2"></i>Manage Shop Owners & Restock Orders</h2>
+        <p class="text-muted">Add shop owners and upload their restock CSV files</p>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Add Shop Owner -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-plus me-2"></i>Add New Shop Owner</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Owner Name</label>
+                        {{ shop_owner_form.name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Shop Name</label>
+                        {{ shop_owner_form.shop_name }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Phone Number</label>
+                        {{ shop_owner_form.phone_number }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        {{ shop_owner_form.email }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        {{ shop_owner_form.address }}
+                    </div>
+                    <button type="submit" name="add_shop_owner" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>Add Shop Owner
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Restock Order -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Restock Order</h5>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label">Select Shop Owner</label>
+                        {{ restock_order_form.shop_owner }}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">CSV File</label>
+                        {{ restock_order_form.csv_file }}
+                        <small class="text-muted d-block">Format: product_name, quantity</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes (Optional)</label>
+                        {{ restock_order_form.notes }}
+                    </div>
+                    <button type="submit" name="upload_restock_order" class="btn btn-success">
+                        <i class="fas fa-upload me-1"></i>Upload Order
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Shop Owners List -->
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0"><i class="fas fa-list me-2"></i>Shop Owners</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Owner Name</th>
+                                <th>Shop Name</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Pending Orders</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for owner in shop_owners %}
+                            <tr>
+                                <td>{{ owner.name }}</td>
+                                <td>{{ owner.shop_name }}</td>
+                                <td>{{ owner.phone_number|default:"-" }}</td>
+                                <td>{{ owner.email|default:"-" }}</td>
+                                <td>
+                                    <span class="badge bg-warning">{{ owner.pending_orders_count }}</span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No shop owners added yet</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Orders -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-warning">
+                <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Pending Restock Orders</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Shop Owner</th>
+                                <th>Shop Name</th>
+                                <th>Uploaded</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in pending_orders %}
+                            <tr>
+                                <td><strong>#{{ order.id }}</strong></td>
+                                <td>{{ order.shop_owner.name }}</td>
+                                <td>{{ order.shop_owner.shop_name }}</td>
+                                <td>{{ order.uploaded_at|date:"M d, Y H:i" }}</td>
+                                <td>{{ order.notes|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">No pending orders</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
