@@ -29,6 +29,14 @@ NeuroStock AI is a comprehensive inventory management system that combines tradi
 - **Real-Time Clocks** - Live time display across all dashboards
 - **Responsive Design** - Mobile and desktop optimized
 - **Clean Interface** - Modern, professional UI/UX
+- **QR Code System** - Individual bill QR codes for instant access
+
+### 📱 **QR Code Features**
+- **Individual Bill QR Codes** - Each bill has unique QR code
+- **Instant Bill Access** - Scan to view complete bill details
+- **Offline Capability** - Works without internet after first load
+- **No Login Required** - Public access to bill information
+- **Privacy Protected** - Each QR shows only that specific bill
 
 ## 🚀 **Quick Start**
 
@@ -119,6 +127,57 @@ python manage.py runserver 0.0.0.0:8000
 http://YOUR_IP_ADDRESS:8000
 ```
 
+## 📱 **QR Code System**
+
+### **Individual Bill QR Codes**
+Each bill automatically generates a unique QR code that provides instant access to complete bill details.
+
+### **Features**
+- **Automatic Generation** - QR code created when bill is printed
+- **Individual Access** - Each QR shows only that specific bill
+- **Complete Details** - Product breakdown, quantities, prices
+- **Store Information** - Store name, location, seller details
+- **Offline Capable** - Works without internet after first load
+- **No Login Required** - Public access for customers
+- **Privacy Protected** - No access to other bills
+
+### **How It Works**
+1. **Create Bill** - Generate bill in billing system
+2. **Print Bill** - QR code appears at bottom of printed bill
+3. **Customer Scans** - Opens individual bill page
+4. **View Details** - See complete product breakdown
+
+### **QR Code URL Format**
+```
+http://localhost:8000/bill/<BILL_NUMBER>/
+```
+
+### **Example**
+```
+Bill: BILL-20260210141502
+QR URL: http://localhost:8000/bill/BILL-20260210141502/
+Shows: Only this bill's details with all products
+```
+
+### **Setup QR Tokens**
+```bash
+# Create QR tokens for all users
+python manage.py shell
+from inventory.models import QRToken, UserProfile
+for profile in UserProfile.objects.all():
+    QRToken.objects.get_or_create(user_profile=profile)
+```
+
+### **Testing**
+```bash
+# Test individual bill QR system
+python test_individual_bill_qr.py
+```
+
+### **Documentation**
+- **INDIVIDUAL_BILL_QR_COMPLETE.md** - Complete guide
+- **QR_QUICK_START.md** - Quick reference
+
 ## 🔐 **Security Features**
 
 - **CSRF Protection** - All forms protected
@@ -139,6 +198,10 @@ NeuroStock AI
 ├── AI Integration Layer
 │   ├── Google Gemini API
 │   └── Intelligent Simulation
+├── QR Code System
+│   ├── Individual Bill QR Generation
+│   ├── Offline Bill Access
+│   └── Public Bill Viewing
 ├── Core Features
 │   ├── Product Management
 │   ├── Stock Control (FEFO)
@@ -156,6 +219,7 @@ NeuroStock AI
 - **Database**: SQLite3 (production-ready)
 - **Frontend**: HTML5, CSS3, JavaScript, Bootstrap 5
 - **AI**: Google Gemini API
+- **QR Codes**: qrcode, Pillow, QRCode.js
 - **Real-Time**: AJAX, WebSocket-ready
 - **Styling**: Professional CSS with animations
 
@@ -181,6 +245,17 @@ NeuroStock AI
 - ✅ Sales reporting
 - ✅ Monthly analytics
 - ✅ Bill management
+- ✅ Individual bill QR codes
+- ✅ Offline bill access
+
+### **QR Code System**
+- ✅ Automatic QR generation per bill
+- ✅ Scan to view bill details
+- ✅ Product breakdown table
+- ✅ Store information display
+- ✅ Works offline
+- ✅ No login required
+- ✅ Print-friendly design
 
 ### **User Management**
 - ✅ Role-based access
