@@ -217,6 +217,19 @@ class SalesBill(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_by = models.ForeignKey('auth.User', on_delete=models.CASCADE, null=True, blank=True)  # Track who created the bill
+    verification_code = models.CharField(max_length=8, unique=True, null=True, blank=True)  # Unique code for shop owner
+    email_sent = models.BooleanField(default=False)  # Track if email was sent
+    email_sent_at = models.DateTimeField(null=True, blank=True)  # When email was sent
+    
+    def generate_verification_code(self):
+        """Generate a unique 8-character verification code"""
+        import random
+        import string
+        while True:
+            code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            if not SalesBill.objects.filter(verification_code=code).exists():
+                self.verification_code = code
+                return code
 
 class SalesBillItem(models.Model):
     bill = models.ForeignKey(SalesBill, on_delete=models.CASCADE, related_name='items')

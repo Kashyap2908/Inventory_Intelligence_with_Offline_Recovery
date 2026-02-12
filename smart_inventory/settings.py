@@ -103,3 +103,18 @@ SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
 
 # Remember Me functionality
 REMEMBER_ME_DURATION = 60 * 60 * 24 * 30  # 30 days
+
+
+# Email Configuration
+# For development (prints to console):
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# For production (sends real emails):
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'shleshdarji317@gmail.com'
+EMAIL_HOST_PASSWORD = 'qkxyxaibqvxsheiw'  # Replace with 16-char App Password from Google
+DEFAULT_FROM_EMAIL = 'NeuroStock <shleshdarji317@gmail.com>'
+

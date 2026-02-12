@@ -2373,6 +2373,11 @@ def billing(request):
                         target_user_role='inventory'
                     )
                 
+                # Generate verification code for all bills
+                if not bill.verification_code:
+                    bill.generate_verification_code()
+                    bill.save()
+                
                 # Show results
                 if insufficient_stock_products:
                     if successful_products:
@@ -2382,7 +2387,7 @@ def billing(request):
                         bill.delete()
                         messages.error(request, f'❌ Cannot create bill! Insufficient stock for: {", ".join(insufficient_stock_products)}')
                 else:
-                    messages.success(request, f'✅ Multi-product bill #{bill.bill_number} created successfully! Total: ₹{bill.total_amount} | All quantities automatically deducted from inventory')
+                    messages.success(request, f'✅ Multi-product bill #{bill.bill_number} created successfully! Total: ₹{bill.total_amount} | Verification Code: {bill.verification_code}')
                 
                 return redirect('billing')
                 
@@ -3943,6 +3948,26 @@ def process_shop_owner_order(request):
             # Mark order as processed
             order.mark_processed(bill, request.user)
             
+            # Send email to shop owner if email is provided
+            print(f"DEBUG: Shop owner email: {shop_owner.email}")
+            print(f"DEBUG: Bill verification code: {bill.verification_code}")
+            
+            if shop_owner.email:
+                print(f"DEBUG: Attempting to send email to {shop_owner.email}")
+                email_success, email_message = send_bill_email(bill, shop_owner)
+                print(f"DEBUG: Email result - Success: {email_success}, Message: {email_message}")
+                
+                if email_success:
+                    messages.info(request, f'📧 Bill sent to {shop_owner.email} with verification code: {bill.verification_code}')
+                else:
+                    messages.warning(request, f'⚠️ Bill created but email failed: {email_message}')
+            else:
+                print(f"DEBUG: No email address for shop owner")
+                # Generate verification code even if no email
+                bill.generate_verification_code()
+                bill.save()
+                messages.info(request, f'📋 Verification code: {bill.verification_code} (No email address for shop owner)')
+            
             # Create notification
             if successful_products:
                 Notification.objects.create(
@@ -3951,6 +3976,8 @@ def process_shop_owner_order(request):
                            f"Shop Owner: {shop_owner.name}\n"
                            f"Products: {', '.join(successful_products)}\n"
                            f"Total Amount: ₹{bill.total_amount}\n"
+                           f"Verification Code: {bill.verification_code}\n"
+                           f"Email Sent: {'Yes' if bill.email_sent else 'No'}\n"
                            f"Inventory automatically updated using FEFO method.\n"
                            f"Processed by: {request.user.first_name or request.user.username}",
                     notification_type='admin_message',
@@ -4129,5 +4156,177 @@ def load_shop_owner_csv(request):
         
     except RestockOrder.DoesNotExist:
         return JsonResponse({'success': False, 'error': 'Order not found'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def send_bill_email(bill, shop_owner):
+    """
+    Send bill details to shop owner's email with verification code
+    """
+    from django.core.mail import send_mail
+    from django.template.loader import render_to_string
+    from django.conf import settings
+    
+    # Generate verification code if not exists
+    if not bill.verification_code:
+        bill.generate_verification_code()
+        bill.save()
+    
+    # Get bill items
+    items = bill.items.all()
+    
+    # Prepare email context
+    context = {
+        'shop_owner': shop_owner,
+        'bill': bill,
+        'items': items,
+        'verification_code': bill.verification_code,
+    }
+    
+    # Email subject
+    subject = f'Bill #{bill.bill_number} - NeuroStock Inventory'
+    
+    # Email body (plain text)
+    message = f"""
+Dear {shop_owner.name},
+
+Your restock order has been processed successfully!
+
+Bill Details:
+-------------
+Bill Number: {bill.bill_number}
+Verification Code: {bill.verification_code}
+Date: {bill.created_at.strftime('%B %d, %Y at %H:%M')}
+Total Amount: ₹{bill.total_amount}
+
+Products:
+---------
+"""
+    
+    for item in items:
+        message += f"• {item.product.name}: {item.quantity} units @ ₹{item.price} = ₹{item.total}\n"
+    
+    message += f"""
+---------
+Grand Total: ₹{bill.total_amount}
+
+IMPORTANT: Your Verification Code is {bill.verification_code}
+Please keep this code safe for your records.
+
+Thank you for your business!
+
+Best regards,
+NeuroStock Inventory Management
+"""
+    
+    # Send email
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[shop_owner.email],
+            fail_silently=False,
+        )
+        
+        # Mark email as sent
+        bill.email_sent = True
+        bill.email_sent_at = timezone.now()
+        bill.save()
+        
+        return True, "Email sent successfully"
+    except Exception as e:
+        return False, f"Email failed: {str(e)}"
+
+
+@login_required
+def send_bill_email_manual(request, bill_id):
+    """
+    Manually send bill email to any email address
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'POST required'})
+    
+    try:
+        import json
+        data = json.loads(request.body)
+        email = data.get('email')
+        
+        if not email:
+            return JsonResponse({'success': False, 'error': 'Email address required'})
+        
+        # Get bill
+        bill = SalesBill.objects.get(id=bill_id, created_by=request.user)
+        
+        # Generate verification code if not exists
+        if not bill.verification_code:
+            bill.generate_verification_code()
+            bill.save()
+        
+        # Get bill items
+        items = bill.items.all()
+        
+        # Email subject
+        subject = f'Bill #{bill.bill_number} - NeuroStock Inventory'
+        
+        # Email body
+        message = f"""
+Dear Customer,
+
+Your bill details from NeuroStock Inventory:
+
+Bill Details:
+-------------
+Bill Number: {bill.bill_number}
+Verification Code: {bill.verification_code}
+Date: {bill.created_at.strftime('%B %d, %Y at %H:%M')}
+Total Amount: ₹{bill.total_amount}
+
+Products:
+---------
+"""
+        
+        for item in items:
+            message += f"• {item.product.name}: {item.quantity} units @ ₹{item.price} = ₹{item.total}\n"
+        
+        message += f"""
+---------
+Grand Total: ₹{bill.total_amount}
+
+IMPORTANT: Your Verification Code is {bill.verification_code}
+Please keep this code safe for your records.
+
+Thank you for your business!
+
+Best regards,
+NeuroStock Inventory Management
+"""
+        
+        # Send email
+        from django.core.mail import send_mail
+        from django.conf import settings
+        
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        
+        # Mark email as sent
+        bill.email_sent = True
+        bill.email_sent_at = timezone.now()
+        bill.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Email sent successfully',
+            'verification_code': bill.verification_code
+        })
+        
+    except SalesBill.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Bill not found'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})

@@ -17,6 +17,7 @@ urlpatterns = [
     path('get-shop-owner-orders/', views.get_shop_owner_orders, name='get_shop_owner_orders'),
     path('load-shop-owner-csv/', views.load_shop_owner_csv, name='load_shop_owner_csv'),
     path('process-shop-owner-order/', views.process_shop_owner_order, name='process_shop_owner_order'),
+    path('send-bill-email/<int:bill_id>/', views.send_bill_email_manual, name='send_bill_email_manual'),
     path('debug-csv/<int:order_id>/', views.debug_csv_file, name='debug_csv_file'),
     path('bill-details/<int:bill_id>/', views.get_bill_details, name='get_bill_details'),
     path('get-bill-details/', views.get_bill_details_api, name='get_bill_details_api'),  # API for admin dashboard modal
