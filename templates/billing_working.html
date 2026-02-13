@@ -1,0 +1,313 @@
+{% extends 'base.html' %}
+{% load tz %}
+
+{% block title %}CSV Billing - NeuroStock{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2>CSV Billing System</h2>
+    
+    <!-- CSV Upload Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5><i class="fas fa-upload me-2"></i>Upload Shop Owner CSV</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <label class="form-label">Select CSV File</label>
+                    <input type="file" id="csv-file" accept=".csv" class="form-control">
+                    <small class="text-muted">Format: Shop Owner Name, Shop Name, Email | Product Name, Category, Price, Stock, Quantity</small>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">&nbsp;</label>
+                    <button onclick="loadCSV()" class="btn btn-primary w-100">
+                        <i class="fas fa-download me-1"></i>Get Order
+                    </button>
+                </div>
+            </div>
+            
+            <div id="order-info" class="mt-3" style="display: none;">
+                <div class="alert alert-success">
+                    <strong>Order Loaded:</strong> <span id="order-details"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Products Table -->
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5><i class="fas fa-list me-2"></i>Selected Products</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Total</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="products-table">
+                        <tr>
+                            <td colspan="5" class="text-center text-muted py-4">
+                                <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                                <br>No products loaded yet
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bill Summary -->
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card bg-primary text-white" id="bill-summary" style="display: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6>Bill Summary</h6>
+                            <small>Total Items: <span id="total-items">0</span></small>
+                        </div>
+                        <div class="text-end">
+                            <h4 id="grand-total">₹0.00</h4>
+                            <small>Grand Total</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <button onclick="createBill()" id="create-bill-btn" class="btn btn-warning btn-lg w-100 h-100" disabled>
+                <i class="fas fa-paper-plane me-1"></i>Create & Send Bill
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let shopOwnerData = null;
+let productsData = [];
+
+// Load CSV function
+function loadCSV() {
+    console.log('loadCSV called');
+    
+    const fileInput = document.getElementById('csv-file');
+    const file = fileInput.files[0];
+    
+    console.log('File input:', fileInput);
+    console.log('Selected file:', file);
+    
+    if (!file) {
+        alert('Please select a CSV file first');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('complete_csv_file', file);
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    console.log('CSRF token element:', csrfToken);
+    
+    if (csrfToken) {
+        formData.append('csrfmiddlewaretoken', csrfToken.value);
+        console.log('CSRF token added:', csrfToken.value);
+    } else {
+        console.error('CSRF token not found');
+        alert('CSRF token not found - check console');
+        return;
+    }
+    
+    // Show loading
+    const btn = event.target;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+    
+    console.log('Sending request to /load-complete-csv/');
+    
+    fetch('/load-complete-csv/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        console.log('Content type:', contentType);
+        
+        if (contentType && contentType.includes('application/json')) {
+            return response.json();
+        } else {
+            return response.text().then(text => {
+                console.error('Non-JSON response:', text.substring(0, 500));
+                throw new Error(`Expected JSON but got: ${contentType}. Response: ${text.substring(0, 200)}`);
+            });
+        }
+    })
+    .then(data => {
+        console.log('Success response:', data);
+        
+        if (data.success) {
+            shopOwnerData = data.shop_owner;
+            productsData = data.products.filter(p => !p.hasError);
+            
+            console.log('Shop owner:', shopOwnerData);
+            console.log('Products:', productsData);
+            
+            updateProductsTable();
+            updateBillSummary();
+            
+            // Show order info
+            document.getElementById('order-details').innerHTML = `
+                ${data.shop_owner.name} from ${data.shop_owner.shop_name} (${data.shop_owner.email})
+                <br>Products: ${productsData.length}
+            `;
+            document.getElementById('order-info').style.display = 'block';
+            
+            alert(`✅ Loaded ${productsData.length} products from ${data.shop_owner.name}`);
+        } else {
+            console.error('API error:', data.error);
+            alert('❌ Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Fetch error:', error);
+        alert('❌ Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download me-1"></i>Get Order';
+    });
+}
+
+// Update products table
+function updateProductsTable() {
+    const tbody = document.getElementById('products-table');
+    
+    if (productsData.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                    <br>No products loaded yet
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    let html = '';
+    productsData.forEach((product, index) => {
+        html += `
+            <tr>
+                <td><strong>${product.name}</strong></td>
+                <td>${product.quantity}</td>
+                <td>₹${product.unitPrice.toFixed(2)}</td>
+                <td><strong>₹${product.total.toFixed(2)}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeProduct(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Update bill summary
+function updateBillSummary() {
+    const totalItems = productsData.reduce((sum, p) => sum + p.quantity, 0);
+    const grandTotal = productsData.reduce((sum, p) => sum + p.total, 0);
+    
+    document.getElementById('total-items').textContent = totalItems;
+    document.getElementById('grand-total').textContent = `₹${grandTotal.toFixed(2)}`;
+    
+    const billSummary = document.getElementById('bill-summary');
+    const createBtn = document.getElementById('create-bill-btn');
+    
+    if (productsData.length > 0) {
+        billSummary.style.display = 'block';
+        createBtn.disabled = false;
+    } else {
+        billSummary.style.display = 'none';
+        createBtn.disabled = true;
+    }
+}
+
+// Remove product
+function removeProduct(index) {
+    if (confirm('Remove this product?')) {
+        productsData.splice(index, 1);
+        updateProductsTable();
+        updateBillSummary();
+    }
+}
+
+// Create bill
+function createBill() {
+    if (!shopOwnerData || productsData.length === 0) {
+        alert('Please load products first');
+        return;
+    }
+    
+    if (!confirm(`Create bill for ${shopOwnerData.name}?\nEmail will be sent to: ${shopOwnerData.email}`)) {
+        return;
+    }
+    
+    // Create form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/process-csv-shop-owner-order/';
+    
+    // CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    form.appendChild(csrfInput);
+    
+    // Shop owner data
+    const shopOwnerInput = document.createElement('input');
+    shopOwnerInput.type = 'hidden';
+    shopOwnerInput.name = 'shop_owner_data';
+    shopOwnerInput.value = JSON.stringify(shopOwnerData);
+    form.appendChild(shopOwnerInput);
+    
+    // Products data
+    const productsInput = document.createElement('input');
+    productsInput.type = 'hidden';
+    productsInput.name = 'products_data';
+    productsInput.value = JSON.stringify(productsData);
+    form.appendChild(productsInput);
+    
+    document.body.appendChild(form);
+    
+    // Show loading
+    const btn = document.getElementById('create-bill-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating & Sending...';
+    
+    form.submit();
+}
+</script>
+
+<form style="display: none;">
+    {% csrf_token %}
+</form>
+{% endblock %}

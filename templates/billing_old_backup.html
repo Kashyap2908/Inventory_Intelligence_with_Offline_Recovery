@@ -1,0 +1,1952 @@
+{% extends 'base.html' %}
+{% load tz %}
+
+{% block title %}Billing Dashboard - NeuroStock{% endblock %}
+
+{% block nav %}
+    <nav class="navbar navbar-expand-lg">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-brain me-2"></i>NeuroStock
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    {% if user.userprofile.role == 'inventory' %}
+                        <!-- Inventory users: Inventory + Billing -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'admin' %}
+                        <!-- Admin users: Inventory + Trends + Billing + Admin -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% elif user.userprofile.role == 'marketing' %}
+                        <!-- Marketing users: Only Trends -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'trend_dashboard' %}">
+                                <i class="fas fa-chart-line me-1"></i>Trends
+                            </a>
+                        </li>
+                    {% else %}
+                        <!-- Fallback: Show all options -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'inventory_dashboard' %}">
+                                <i class="fas fa-warehouse me-1"></i>Inventory
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'billing' %}">
+                                <i class="fas fa-receipt me-1"></i>Billing
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'admin_dashboard' %}">
+                                <i class="fas fa-cog me-1"></i>Admin
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user me-1"></i>{{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'generate_qr_token' %}">
+                                <i class="fas fa-qrcode me-1"></i>Digital Ledger QR
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">
+                                <i class="fas fa-sign-out-alt me-1"></i>Logout
+                            </a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+{% endblock %}
+
+{% block content %}
+<!-- Header with Quick Stats -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">My Billing & Sales</h2>
+                <p class="text-muted mb-0">
+                    <i class="fas fa-user me-1"></i>{{ user.first_name|default:user.username }}'s Sales Dashboard | Process sales with FEFO stock deduction
+                </p>
+            </div>
+            <div class="d-flex gap-3">
+                <div class="text-center">
+                    <div class="badge bg-primary fs-6">₹{{ today_sales_amount|floatformat:0 }}</div>
+                    <small class="text-muted d-block">Today's Sales</small>
+                </div>
+                <div class="text-center">
+                    <div class="badge bg-success fs-6">{{ today_sales_count }}</div>
+                    <small class="text-muted d-block">Bills Today</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Dashboard Tabs -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-light">
+                <ul class="nav nav-tabs card-header-tabs" id="billingTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="create-bill-tab" data-bs-toggle="tab" data-bs-target="#create-bill-panel" type="button" role="tab">
+                            <i class="fas fa-plus me-2"></i>Create Bill
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="recent-bills-tab" data-bs-toggle="tab" data-bs-target="#recent-bills-panel" type="button" role="tab">
+                            <i class="fas fa-history me-2"></i>Recent Bills
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="sales-stats-tab" data-bs-toggle="tab" data-bs-target="#sales-stats-panel" type="button" role="tab">
+                            <i class="fas fa-chart-bar me-2"></i>Sales Statistics
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content" id="billingTabContent">
+                    
+                    <!-- Create Bill Panel -->
+                    <div class="tab-pane fade show active" id="create-bill-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-12">
+                                <!-- Shop Owner Order Processing - Simplified CSV Upload -->
+                                <div class="card mb-4 border-primary">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-store me-2"></i>Process Shop Owner Restock Order (CSV)</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="alert alert-info mb-3">
+                                            <i class="fas fa-info-circle me-2"></i>
+                                            <strong>Upload a complete CSV file</strong> with shop owner details and products in one file.
+                                            <br>
+                                            <small><strong>CSV Format:</strong> First row: Shop Owner Name, Shop Name, Email | Second row: Product Name, Category, Price, Current Stock, Restock Quantity | Third row onwards: Product details</small>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-8">
+                                                <label class="form-label fw-bold">Upload Complete CSV File</label>
+                                                <input type="file" name="complete_csv_file" id="complete-csv-file" class="form-control" accept=".csv">
+                                                <small class="text-muted">
+                                                    CSV must contain shop owner info (name, shop, email) and products (name, quantity)
+                                                </small>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" id="get-order-btn" class="btn btn-primary w-100" onclick="simpleUploadCSV()">
+                                                    <i class="fas fa-download me-1"></i>Get Order
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div id="csv-order-info" class="mt-3" style="display: none;">
+                                            <div class="alert alert-success">
+                                                <i class="fas fa-check-circle me-2"></i>
+                                                <strong>Order loaded!</strong> <span id="csv-order-details"></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <a href="/static/sample_complete_order.csv" download class="btn btn-sm btn-outline-info me-2">
+                                                <i class="fas fa-download me-1"></i>Download Sample CSV
+                                            </a>
+                                            <small class="text-muted">Download sample to see the correct format</small>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <div class="card bg-light">
+                                                <div class="card-body">
+                                                    <h6 class="card-title"><i class="fas fa-file-csv me-1"></i>CSV Format Example:</h6>
+                                                    <pre class="mb-0" style="font-size: 0.85rem;">Rajesh Kumar,Kumar General Store,rajesh@kumarstore.com
+Product Name,Category,Price,Current Stock,Restock Quantity
+Rice,Grains,45,100,50
+Sugar,Sweeteners,40,80,30</pre>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Manual Entry Section -->
+                                <div class="alert alert-secondary">
+                                    <i class="fas fa-keyboard me-2"></i><strong>Or add products manually below:</strong>
+                                </div>
+
+                                <!-- Add Product Section -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h6 class="mb-0"><i class="fas fa-plus me-1"></i>Add Products to Bill</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <label class="form-label">Select Product</label>
+                                                <input type="text" id="product-search" class="form-control product-autocomplete" 
+                                                       placeholder="Type product name..." autocomplete="off">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Quantity</label>
+                                                <input type="number" id="product-quantity" class="form-control" 
+                                                       placeholder="Enter quantity" min="1">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Price</label>
+                                                <input type="text" id="product-price" class="form-control" 
+                                                       placeholder="₹0.00" readonly>
+                                            </div>
+                                            <div class="col-md-2">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" id="add-product-btn" class="btn btn-success w-100" disabled>
+                                                    <i class="fas fa-plus me-1"></i>Add
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <small class="text-muted">Available Stock: <span id="available-stock-info">Select a product</span></small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Selected Products -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-success text-white">
+                                        <h6 class="mb-0"><i class="fas fa-list me-1"></i>Selected Products</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover" id="selected-products-table">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th><i class="fas fa-box me-1"></i>Product Name</th>
+                                                        <th><i class="fas fa-sort-numeric-up me-1"></i>Quantity</th>
+                                                        <th><i class="fas fa-rupee-sign me-1"></i>Unit Price</th>
+                                                        <th><i class="fas fa-calculator me-1"></i>Total</th>
+                                                        <th><i class="fas fa-cog me-1"></i>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="selected-products-body">
+                                                    <tr id="no-products-row">
+                                                        <td colspan="5" class="text-center text-muted py-4">
+                                                            <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                                                            <br>No products added yet
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bill Summary & Create Button -->
+                                <div class="row">
+                                    <div class="col-md-8">
+                                        <div class="card bg-primary text-white" id="bill-summary" style="display: none;">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <div>
+                                                        <h6 class="mb-1"><i class="fas fa-receipt me-1"></i>Bill Summary</h6>
+                                                        <small class="opacity-75">Total Items: <span id="total-items">0</span></small>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <h4 class="mb-0" id="grand-total">₹0.00</h4>
+                                                        <small class="opacity-75">Grand Total</small>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <form method="post" id="multi-product-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" id="products-data" name="products_data" value="">
+                                            <button type="submit" id="create-bill-btn" class="btn btn-warning btn-lg w-100 h-100" disabled>
+                                                <i class="fas fa-paper-plane me-1"></i>Create & Send Bill
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Bills Panel -->
+                    <div class="tab-pane fade" id="recent-bills-panel" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><i class="fas fa-hashtag me-1"></i>Bill Number</th>
+                                        <th><i class="fas fa-key me-1"></i>Verification Code</th>
+                                        <th><i class="fas fa-calendar me-1"></i>Date & Time</th>
+                                        <th><i class="fas fa-rupee-sign me-1"></i>Total Amount</th>
+                                        <th><i class="fas fa-boxes me-1"></i>Items</th>
+                                        <th><i class="fas fa-cog me-1"></i>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for bill in recent_bills %}
+                                    <tr>
+                                        <td><strong class="text-primary">{{ bill.bill_number }}</strong></td>
+                                        <td>
+                                            {% if bill.verification_code %}
+                                                <code class="text-success">{{ bill.verification_code }}</code>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="bill-time" data-created-time="{{ bill.created_at|date:'c' }}">
+                                            {% timezone "Asia/Kolkata" %}{{ bill.created_at|date:"M d, H:i" }}{% endtimezone %}
+                                        </td>
+                                        <td><strong class="text-success">₹{{ bill.total_amount }}</strong></td>
+                                        <td>
+                                            <span class="badge bg-info">{{ bill.items.count }} item{{ bill.items.count|pluralize }}</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm btn-primary me-1" 
+                                                    onclick="viewBillDetails('{{ bill.id }}')" 
+                                                    title="View Bill Details"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-success" 
+                                                    onclick="sendBillEmail('{{ bill.id }}')" 
+                                                    title="Send Email with Code"
+                                                    data-bs-toggle="tooltip">
+                                                <i class="fas fa-envelope"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% empty %}
+                                    <tr>
+                                        <td colspan="6" class="text-center text-muted py-4">
+                                            <i class="fas fa-receipt fa-2x mb-2"></i>
+                                            <br>No recent bills
+                                            <br><small>Create a sale to see bills here</small>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Sales Statistics Panel -->
+                    <div class="tab-pane fade" id="sales-stats-panel" role="tabpanel">
+                        <div class="row">
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-primary">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-rupee-sign fa-3x text-primary"></i>
+                                        </div>
+                                        <h3 class="text-primary">₹{{ today_sales_amount|floatformat:2 }}</h3>
+                                        <h6 class="text-muted">My Today's Sales</h6>
+                                        <p class="small text-muted mb-0">{{ today_sales_count }} transactions today</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-success">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-receipt fa-3x text-success"></i>
+                                        </div>
+                                        <h3 class="text-success">{{ today_sales_count }}</h3>
+                                        <h6 class="text-muted">My Today's Bills</h6>
+                                        <p class="small text-muted mb-0">Total transactions processed</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-4">
+                                <div class="card h-100 border-info">
+                                    <div class="card-body text-center">
+                                        <div class="mb-3">
+                                            <i class="fas fa-calendar-alt fa-3x text-info"></i>
+                                        </div>
+                                        <h3 class="text-info">₹{{ monthly_sales_amount|floatformat:2 }}</h3>
+                                        <h6 class="text-muted">My Monthly Sales</h6>
+                                        <p class="small text-muted mb-0">{{ monthly_sales_count }} transactions in {{ current_month_name }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Stats Row -->
+                        <div class="row">
+                            <div class="col-12">
+                                <div class="card">
+                                    <div class="card-header bg-light">
+                                        <h6 class="mb-0"><i class="fas fa-chart-line me-1"></i>My Sales Performance</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row text-center">
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-primary">₹{{ today_sales_amount|floatformat:0 }}</h5>
+                                                    <small class="text-muted">Today</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-success">₹{{ monthly_sales_amount|floatformat:0 }}</h5>
+                                                    <small class="text-muted">This Month</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="border-end">
+                                                    <h5 class="text-info">{{ today_sales_count }}</h5>
+                                                    <small class="text-muted">Bills Today</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <h5 class="text-warning">{{ monthly_sales_count }}</h5>
+                                                <small class="text-muted">Bills This Month</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Working CSV upload function
+function simpleUploadCSV() {
+    const fileInput = document.getElementById('complete-csv-file');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a CSV file first');
+        return;
+    }
+    
+    const btn = document.getElementById('get-order-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+    
+    const formData = new FormData();
+    formData.append('complete_csv_file', file);
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken) {
+        formData.append('csrfmiddlewaretoken', csrfToken.value);
+    }
+    
+    fetch('/load-complete-csv/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Store data globally
+            window.shopOwnerOrderData = data;
+            window.selectedProducts = [];
+            
+            // Add valid products
+            data.products.forEach(product => {
+                if (!product.hasError) {
+                    window.selectedProducts.push({
+                        id: product.id,
+                        name: product.name,
+                        quantity: product.quantity,
+                        unitPrice: product.unitPrice,
+                        total: product.total
+                    });
+                }
+            });
+            
+            // Update table
+            updateSimpleTable();
+            
+            // Show success
+            alert(`✅ Loaded ${window.selectedProducts.length} products from ${data.shop_owner.name}`);
+            
+            // Show order info
+            const orderInfo = document.getElementById('csv-order-info');
+            const orderDetails = document.getElementById('csv-order-details');
+            if (orderInfo && orderDetails) {
+                orderDetails.innerHTML = `
+                    <strong>${data.shop_owner.name}</strong> from <strong>${data.shop_owner.shop_name}</strong><br>
+                    Email: ${data.shop_owner.email}<br>
+                    Products loaded: ${window.selectedProducts.length}
+                `;
+                orderInfo.style.display = 'block';
+            }
+        } else {
+            alert('❌ Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        alert('❌ Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download me-1"></i>Get Order';
+    });
+}
+
+// Update table function
+function updateSimpleTable() {
+    const tbody = document.getElementById('selected-products-body');
+    if (!tbody || !window.selectedProducts) return;
+    
+    if (window.selectedProducts.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                    <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                    <br>No products added yet
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    let html = '';
+    window.selectedProducts.forEach((product, index) => {
+        html += `
+            <tr>
+                <td><strong>${product.name}</strong></td>
+                <td>${product.quantity}</td>
+                <td>₹${product.unitPrice.toFixed(2)}</td>
+                <td><strong>₹${product.total.toFixed(2)}</strong></td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeSimpleProduct(${index})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+    
+    // Update bill summary
+    const totalItems = window.selectedProducts.reduce((sum, p) => sum + p.quantity, 0);
+    const grandTotal = window.selectedProducts.reduce((sum, p) => sum + p.total, 0);
+    
+    const totalItemsEl = document.getElementById('total-items');
+    const grandTotalEl = document.getElementById('grand-total');
+    const billSummary = document.getElementById('bill-summary');
+    const createBillBtn = document.getElementById('create-bill-btn');
+    const productsDataInput = document.getElementById('products-data');
+    
+    if (totalItemsEl) totalItemsEl.textContent = totalItems;
+    if (grandTotalEl) grandTotalEl.textContent = `₹${grandTotal.toFixed(2)}`;
+    if (billSummary) billSummary.style.display = window.selectedProducts.length > 0 ? 'block' : 'none';
+    if (createBillBtn) createBillBtn.disabled = window.selectedProducts.length === 0;
+    if (productsDataInput) productsDataInput.value = JSON.stringify(window.selectedProducts);
+}
+
+// Remove product function
+function removeSimpleProduct(index) {
+    if (confirm('Remove this product?')) {
+        window.selectedProducts.splice(index, 1);
+        updateSimpleTable();
+    }
+}
+
+// Handle form submission
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('multi-product-form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            if (window.shopOwnerOrderData && window.selectedProducts && window.selectedProducts.length > 0) {
+                e.preventDefault();
+                
+                if (!confirm(`Create bill for ${window.shopOwnerOrderData.shop_owner.name}?\nEmail will be sent to: ${window.shopOwnerOrderData.shop_owner.email}`)) {
+                    return;
+                }
+                
+                // Create hidden form
+                const hiddenForm = document.createElement('form');
+                hiddenForm.method = 'POST';
+                hiddenForm.action = '/process-csv-shop-owner-order/';
+                
+                // CSRF token
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                hiddenForm.appendChild(csrfInput);
+                
+                // Shop owner data
+                const shopOwnerInput = document.createElement('input');
+                shopOwnerInput.type = 'hidden';
+                shopOwnerInput.name = 'shop_owner_data';
+                shopOwnerInput.value = JSON.stringify(window.shopOwnerOrderData.shop_owner);
+                hiddenForm.appendChild(shopOwnerInput);
+                
+                // Products data
+                const productsInput = document.createElement('input');
+                productsInput.type = 'hidden';
+                productsInput.name = 'products_data';
+                productsInput.value = JSON.stringify(window.selectedProducts);
+                hiddenForm.appendChild(productsInput);
+                
+                document.body.appendChild(hiddenForm);
+                
+                // Show loading
+                const btn = document.getElementById('create-bill-btn');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating & Sending...';
+                
+                hiddenForm.submit();
+            }
+        });
+    }
+});
+
+// Simple test function
+function testButtonClick() {
+    alert('Button clicked! JavaScript is working.');
+    console.log('TEST: Button click detected');
+    
+    // Now try the real CSV upload
+    const file = document.getElementById('complete-csv-file').files[0];
+    if (!file) {
+        alert('Please select a CSV file first');
+        return;
+    }
+    
+    console.log('TEST: File selected:', file.name);
+    
+    // Create FormData
+    const formData = new FormData();
+    formData.append('complete_csv_file', file);
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (csrfToken) {
+        formData.append('csrfmiddlewaretoken', csrfToken.value);
+    }
+    
+    // Show loading
+    const btn = document.getElementById('get-order-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+    
+    // Upload CSV
+    fetch('/load-complete-csv/', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('CSV Response:', data);
+        
+        if (data.success) {
+            alert(`✅ Success! Loaded ${data.products.length} products from ${data.shop_owner.name}`);
+            
+            // Store data globally
+            window.shopOwnerOrderData = data;
+            window.selectedProducts = [];
+            
+            // Add valid products
+            data.products.forEach(product => {
+                if (!product.hasError) {
+                    window.selectedProducts.push({
+                        id: product.id,
+                        name: product.name,
+                        quantity: product.quantity,
+                        unitPrice: product.unitPrice,
+                        total: product.total
+                    });
+                }
+            });
+            
+            // Update table if function exists
+            if (typeof window.updateSelectedProductsTable === 'function') {
+                window.updateSelectedProductsTable();
+                window.updateBillSummary();
+            }
+            
+            // Show order info
+            const orderInfo = document.getElementById('csv-order-info');
+            const orderDetails = document.getElementById('csv-order-details');
+            if (orderInfo && orderDetails) {
+                orderDetails.innerHTML = `
+                    <strong>${data.shop_owner.name}</strong> from <strong>${data.shop_owner.shop_name}</strong><br>
+                    Email: ${data.shop_owner.email}<br>
+                    Products loaded: ${data.products.filter(p => !p.hasError).length}
+                `;
+                orderInfo.style.display = 'block';
+            }
+        } else {
+            alert('❌ Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('❌ Error: ' + error.message);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-download me-1"></i>Get Order';
+    });
+}
+
+// Global variables for multi-product billing
+let selectedProducts = [];
+let currentProductData = null;
+let shopOwnerOrderData = null;
+
+// Shop Owner Order Processing
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DEBUG: DOM Content Loaded - Starting CSV upload setup');
+    
+    // Complete CSV Upload Handler
+    const getOrderBtn = document.getElementById('get-order-btn');
+    const completeCsvFile = document.getElementById('complete-csv-file');
+    const csvOrderInfo = document.getElementById('csv-order-info');
+    const csvOrderDetails = document.getElementById('csv-order-details');
+    
+    console.log('DEBUG: Elements found:', {
+        getOrderBtn: !!getOrderBtn,
+        completeCsvFile: !!completeCsvFile,
+        csvOrderInfo: !!csvOrderInfo,
+        csvOrderDetails: !!csvOrderDetails
+    });
+    
+    // Test button click
+    if (getOrderBtn) {
+        console.log('DEBUG: Get Order button found, adding test click');
+        getOrderBtn.onclick = function() {
+            console.log('DEBUG: BUTTON CLICKED! This should show in console');
+            alert('Button clicked! Check console for more details.');
+        };
+        
+        // Also add the real event listener
+        getOrderBtn.addEventListener('click', function() {
+            console.log('DEBUG: Get Order button clicked via addEventListener');
+            
+            const file = completeCsvFile.files[0];
+            console.log('DEBUG: Selected file:', file);
+            
+            if (!file) {
+                alert('Please select a CSV file first');
+                return;
+            }
+            
+            console.log('DEBUG: File selected:', file.name);
+            
+            // Show loading state
+            getOrderBtn.disabled = true;
+            getOrderBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('complete_csv_file', file);
+            
+            // Get CSRF token
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+            if (csrfToken) {
+                formData.append('csrfmiddlewaretoken', csrfToken.value);
+                console.log('DEBUG: CSRF token added');
+            } else {
+                console.error('DEBUG: CSRF token not found');
+            }
+            
+            console.log('DEBUG: Sending request to /load-complete-csv/');
+            
+            // Upload and parse CSV
+            fetch('/load-complete-csv/', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('DEBUG: Response received:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('DEBUG: CSV Load Response:', data);
+                
+                if (data.success) {
+                    // Store order data globally
+                    shopOwnerOrderData = data;
+                    
+                    // Clear existing products
+                    selectedProducts = [];
+                    
+                    // Add valid products to selected products
+                    data.products.forEach(product => {
+                        if (!product.hasError) {
+                            selectedProducts.push({
+                                id: product.id,
+                                name: product.name,
+                                quantity: product.quantity,
+                                unitPrice: product.unitPrice,
+                                total: product.total
+                            });
+                        }
+                    });
+                    
+                    console.log('DEBUG: Selected products:', selectedProducts);
+                    
+                    // Update the table
+                    if (typeof window.updateSelectedProductsTable === 'function') {
+                        window.updateSelectedProductsTable();
+                        window.updateBillSummary();
+                        console.log('DEBUG: Table updated');
+                    } else {
+                        console.error('DEBUG: updateSelectedProductsTable function not found');
+                    }
+                    
+                    // Show success info
+                    const validCount = data.products.filter(p => !p.hasError).length;
+                    const errorCount = data.products.filter(p => p.hasError).length;
+                    
+                    if (csvOrderDetails) {
+                        csvOrderDetails.innerHTML = `
+                            <strong>${data.shop_owner.name}</strong> from <strong>${data.shop_owner.shop_name}</strong><br>
+                            Email: ${data.shop_owner.email}<br>
+                            Products loaded: ${validCount}${errorCount > 0 ? ` (${errorCount} errors)` : ''}
+                        `;
+                    }
+                    
+                    if (csvOrderInfo) {
+                        csvOrderInfo.style.display = 'block';
+                    }
+                    
+                    // Show alert
+                    let message = `✅ Loaded ${validCount} product(s) from ${data.shop_owner.name}'s order`;
+                    if (errorCount > 0) {
+                        message += `\n⚠️ ${errorCount} product(s) had errors`;
+                    }
+                    alert(message);
+                    
+                    // Scroll to selected products
+                    const productsTable = document.getElementById('selected-products-table');
+                    if (productsTable) {
+                        productsTable.scrollIntoView({ behavior: 'smooth' });
+                    }
+                } else {
+                    console.error('DEBUG: CSV load failed:', data.error);
+                    alert('❌ Error: ' + data.error);
+                    if (csvOrderInfo) {
+                        csvOrderInfo.style.display = 'none';
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('DEBUG: Fetch error:', error);
+                alert('❌ Error loading CSV: ' + error.message);
+                if (csvOrderInfo) {
+                    csvOrderInfo.style.display = 'none';
+                }
+            })
+            .finally(() => {
+                console.log('DEBUG: Request completed, resetting button');
+                // Reset button
+                getOrderBtn.disabled = false;
+                getOrderBtn.innerHTML = '<i class="fas fa-download me-1"></i>Get Order';
+            });
+        });
+    } else {
+        console.error('DEBUG: Get Order button NOT FOUND!');
+        console.log('DEBUG: Available buttons:', document.querySelectorAll('button'));
+    }
+    
+    // OLD shop owner select code (keep for backward compatibility if needed)
+    const shopOwnerSelect = document.getElementById('shop-owner-select');
+    const loadOrderBtn = document.getElementById('load-order-btn');
+    const orderInfo = document.getElementById('order-info');
+    const orderDetails = document.getElementById('order-details');
+    
+    let currentOrderId = null;
+    
+    if (shopOwnerSelect) {
+        shopOwnerSelect.addEventListener('change', function() {
+            const orderId = this.value;
+            
+            if (!orderId) {
+                loadOrderBtn.disabled = true;
+                orderInfo.style.display = 'none';
+                currentOrderId = null;
+                return;
+            }
+            
+            // Get selected option details
+            const selectedOption = this.options[this.selectedIndex];
+            const shopName = selectedOption.getAttribute('data-shop-name');
+            
+            currentOrderId = orderId;
+            orderDetails.textContent = `CSV file ready for ${shopName}`;
+            orderInfo.style.display = 'block';
+            loadOrderBtn.disabled = false;
+        });
+    }
+    
+    if (loadOrderBtn) {
+        loadOrderBtn.addEventListener('click', function() {
+            if (!currentOrderId) {
+                alert('Please select a shop owner first');
+                return;
+            }
+            
+            // Show loading state
+            loadOrderBtn.disabled = true;
+            loadOrderBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading CSV...';
+            
+            // Fetch CSV data
+            fetch(`/load-shop-owner-csv/?order_id=${currentOrderId}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('CSV Load Response:', data);
+                    
+                    if (data.success) {
+                        // Store order data for later bill creation
+                        shopOwnerOrderData = data;
+                        
+                        // Clear existing products
+                        selectedProducts = [];
+                        
+                        // Add products from CSV to selected products
+                        data.products.forEach(product => {
+                            if (!product.hasError) {
+                                selectedProducts.push({
+                                    id: product.id,
+                                    name: product.name,
+                                    quantity: product.quantity,
+                                    unitPrice: product.unitPrice,
+                                    total: product.total
+                                });
+                            }
+                        });
+                        
+                        // Update the table - call global function
+                        if (typeof window.updateSelectedProductsTable === 'function') {
+                            window.updateSelectedProductsTable();
+                            window.updateBillSummary();
+                        }
+                        
+                        // Show success message
+                        const validCount = data.products.filter(p => !p.hasError).length;
+                        const errorCount = data.products.filter(p => p.hasError).length;
+                        
+                        let message = `✅ Loaded ${validCount} product(s) from ${data.shop_owner.name}'s order`;
+                        if (errorCount > 0) {
+                            message += `\n⚠️ ${errorCount} product(s) had errors and were skipped`;
+                        }
+                        alert(message);
+                        
+                        // Show errors if any
+                        if (data.errors.length > 0) {
+                            console.log('CSV Errors:', data.errors);
+                        }
+                        
+                        // Scroll to selected products table
+                        document.getElementById('selected-products-table').scrollIntoView({ behavior: 'smooth' });
+                    } else {
+                        alert('Error loading CSV: ' + data.error);
+                        console.error('CSV Error:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                    alert('Error loading CSV file: ' + error.message + '. Check console for details.');
+                })
+                .finally(() => {
+                    // Reset button
+                    loadOrderBtn.disabled = false;
+                    loadOrderBtn.innerHTML = '<i class="fas fa-download me-1"></i>Load Products from CSV';
+                });
+        });
+    }
+    
+    // Modify the create bill button to handle shop owner orders
+    const originalCreateBill = document.getElementById('multi-product-form');
+    if (originalCreateBill) {
+        originalCreateBill.addEventListener('submit', function(e) {
+            console.log('Form submitted!');
+            console.log('shopOwnerOrderData:', shopOwnerOrderData);
+            console.log('selectedProducts:', selectedProducts);
+            
+            // If we have shop owner order data from CSV, process it with email
+            if (shopOwnerOrderData && selectedProducts.length > 0) {
+                console.log('Using CSV shop owner order endpoint');
+                e.preventDefault();
+                
+                if (!confirm(`Create bill for ${shopOwnerOrderData.shop_owner.name} - ${shopOwnerOrderData.shop_owner.shop_name}?\nEmail will be sent to: ${shopOwnerOrderData.shop_owner.email}`)) {
+                    return;
+                }
+                
+                // Create form to process CSV shop owner order
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/process-csv-shop-owner-order/';
+                
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                
+                // Add shop owner data
+                const shopOwnerInput = document.createElement('input');
+                shopOwnerInput.type = 'hidden';
+                shopOwnerInput.name = 'shop_owner_data';
+                shopOwnerInput.value = JSON.stringify(shopOwnerOrderData.shop_owner);
+                form.appendChild(shopOwnerInput);
+                
+                // Add products data
+                const productsInput = document.createElement('input');
+                productsInput.type = 'hidden';
+                productsInput.name = 'products_data';
+                productsInput.value = JSON.stringify(selectedProducts);
+                form.appendChild(productsInput);
+                
+                document.body.appendChild(form);
+                
+                // Show loading
+                const createBillBtn = document.getElementById('create-bill-btn');
+                createBillBtn.disabled = true;
+                createBillBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating & Sending...';
+                
+                form.submit();
+            } else {
+                console.log('Using regular billing endpoint');
+                // Let normal form submission happen for manual entries
+            }
+        });
+    }
+                form.submit();
+            } else {
+                console.log('Using regular billing endpoint');
+            }
+            // Otherwise, let the normal form submission happen
+        });
+    }
+});
+
+// Real-time clock for billing
+function updateBillingTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
+    
+    const currentTimeElement = document.getElementById('current-time-billing');
+    if (currentTimeElement) {
+        currentTimeElement.textContent = timeString;
+    }
+}
+
+// Initialize billing time updates and tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    updateBillingTime();
+    setInterval(updateBillingTime, 1000);
+    
+    // Initialize Bootstrap tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    console.log('Billing dashboard initialized');
+    console.log('Bootstrap version:', typeof bootstrap !== 'undefined' ? 'loaded' : 'not loaded');
+});
+
+// Multi-Product Billing System
+document.addEventListener('DOMContentLoaded', function() {
+    // Use global variables instead of local ones
+    // let selectedProducts = [];  // Now global
+    // let currentProductData = null;  // Now global
+    
+    // DOM elements
+    const productSearch = document.getElementById('product-search');
+    const productQuantity = document.getElementById('product-quantity');
+    const productPrice = document.getElementById('product-price');
+    const addProductBtn = document.getElementById('add-product-btn');
+    const selectedProductsBody = document.getElementById('selected-products-body');
+    const noProductsRow = document.getElementById('no-products-row');
+    const billSummary = document.getElementById('bill-summary');
+    const totalItems = document.getElementById('total-items');
+    const grandTotal = document.getElementById('grand-total');
+    const createBillBtn = document.getElementById('create-bill-btn');
+    const productsDataInput = document.getElementById('products-data');
+    const availableStockInfo = document.getElementById('available-stock-info');
+    
+    // Product search functionality
+    if (productSearch) {
+        productSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            if (query.length >= 2) {
+                searchProducts(query);
+            } else {
+                clearProductSelection();
+            }
+        });
+        
+        productSearch.addEventListener('change', function() {
+            const productName = this.value.trim();
+            if (productName) {
+                selectProduct(productName);
+            }
+        });
+    }
+    
+    // Quantity input functionality
+    if (productQuantity) {
+        productQuantity.addEventListener('input', function() {
+            validateQuantity();
+            updateAddButton();
+        });
+    }
+    
+    // Add product button
+    if (addProductBtn) {
+        addProductBtn.addEventListener('click', function() {
+            addProductToBill();
+        });
+    }
+    
+    // Multi-product form submission
+    const multiProductForm = document.getElementById('multi-product-form');
+    if (multiProductForm) {
+        multiProductForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            createMultiProductBill();
+        });
+    }
+    
+    function searchProducts(query) {
+        fetch(`/api/search-products-billing/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                console.log('Search results:', data.products);
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+            });
+    }
+    
+    function selectProduct(productName) {
+        fetch(`/api/search-products-billing/?q=${encodeURIComponent(productName)}`)
+            .then(response => response.json())
+            .then(searchData => {
+                const exactMatch = searchData.products.find(p => 
+                    p.name.toLowerCase() === productName.toLowerCase()
+                );
+                
+                if (exactMatch) {
+                    return fetch(`/product-details/${exactMatch.id}/`);
+                } else {
+                    throw new Error('Product not found');
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                currentProductData = data;
+                updateProductFields(data);
+                validateQuantity();
+                updateAddButton();
+            })
+            .catch(error => {
+                console.error('Error fetching product details:', error);
+                clearProductSelection();
+                showError('Product not found. Please select from available products.');
+            });
+    }
+    
+    function updateProductFields(data) {
+        if (productPrice) {
+            productPrice.value = `₹${parseFloat(data.current_price).toFixed(2)}`;
+        }
+        
+        if (availableStockInfo) {
+            const stockCount = data.max_sellable_quantity || data.total_stock;
+            let stockClass = 'text-success';
+            
+            if (stockCount === 0) {
+                stockClass = 'text-danger';
+            } else if (stockCount < 10) {
+                stockClass = 'text-warning';
+            }
+            
+            availableStockInfo.innerHTML = `<span class="${stockClass}">${stockCount} units available</span>`;
+        }
+        
+        if (productQuantity) {
+            productQuantity.setAttribute('max', data.max_sellable_quantity || data.total_stock);
+            productQuantity.setAttribute('min', '1');
+        }
+    }
+    
+    function validateQuantity() {
+        if (!currentProductData || !productQuantity.value) return false;
+        
+        const quantity = parseInt(productQuantity.value) || 0;
+        const maxStock = currentProductData.max_sellable_quantity || currentProductData.total_stock;
+        
+        return quantity > 0 && quantity <= maxStock;
+    }
+    
+    function updateAddButton() {
+        if (addProductBtn) {
+            const isValid = currentProductData && validateQuantity() && productSearch.value.trim();
+            addProductBtn.disabled = !isValid;
+        }
+    }
+    
+    function addProductToBill() {
+        if (!currentProductData || !validateQuantity()) {
+            showError('Please select a valid product and quantity.');
+            return;
+        }
+        
+        const productName = currentProductData.name;
+        const quantity = parseInt(productQuantity.value);
+        const unitPrice = parseFloat(currentProductData.current_price);
+        const total = quantity * unitPrice;
+        
+        // Check if product already exists in the bill
+        const existingProductIndex = selectedProducts.findIndex(p => p.name === productName);
+        
+        if (existingProductIndex !== -1) {
+            // Update existing product quantity
+            const existingProduct = selectedProducts[existingProductIndex];
+            const newQuantity = existingProduct.quantity + quantity;
+            const maxStock = currentProductData.max_sellable_quantity || currentProductData.total_stock;
+            
+            if (newQuantity > maxStock) {
+                showError(`Cannot add ${quantity} more units. Maximum available: ${maxStock - existingProduct.quantity}`);
+                return;
+            }
+            
+            selectedProducts[existingProductIndex].quantity = newQuantity;
+            selectedProducts[existingProductIndex].total = newQuantity * unitPrice;
+        } else {
+            // Add new product
+            selectedProducts.push({
+                id: currentProductData.id || Date.now(),
+                name: productName,
+                quantity: quantity,
+                unitPrice: unitPrice,
+                total: total
+            });
+        }
+        
+        updateSelectedProductsTable();
+        updateBillSummary();
+        clearProductInputs();
+        
+        showSuccess(`Added ${quantity} units of ${productName} to bill`);
+    }
+    
+    // Expose functions globally for shop owner CSV loading
+    window.updateSelectedProductsTable = function() {
+        const selectedProductsBody = document.getElementById('selected-products-body');
+        
+        if (!selectedProductsBody) {
+            console.error('selectedProductsBody element not found');
+            return;
+        }
+        
+        if (selectedProducts.length === 0) {
+            selectedProductsBody.innerHTML = `
+                <tr id="no-products-row">
+                    <td colspan="5" class="text-center text-muted py-4">
+                        <i class="fas fa-shopping-cart fa-2x mb-2"></i>
+                        <br>No products added yet
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        let tableHTML = '';
+        selectedProducts.forEach((product, index) => {
+            tableHTML += `
+                <tr>
+                    <td><strong>${product.name}</strong></td>
+                    <td>${product.quantity}</td>
+                    <td>₹${product.unitPrice.toFixed(2)}</td>
+                    <td><strong>₹${product.total.toFixed(2)}</strong></td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" onclick="removeProduct(${index})" title="Remove Product">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        selectedProductsBody.innerHTML = tableHTML;
+    };
+    
+    window.updateBillSummary = function() {
+        const totalItems = document.getElementById('total-items');
+        const grandTotal = document.getElementById('grand-total');
+        const billSummary = document.getElementById('bill-summary');
+        const createBillBtn = document.getElementById('create-bill-btn');
+        const productsDataInput = document.getElementById('products-data');
+        
+        const totalItemsCount = selectedProducts.reduce((sum, product) => sum + product.quantity, 0);
+        const grandTotalAmount = selectedProducts.reduce((sum, product) => sum + product.total, 0);
+        
+        if (totalItems) totalItems.textContent = totalItemsCount;
+        if (grandTotal) grandTotal.textContent = `₹${grandTotalAmount.toFixed(2)}`;
+        
+        // Show/hide bill summary
+        if (billSummary) {
+            billSummary.style.display = selectedProducts.length > 0 ? 'block' : 'none';
+        }
+        
+        // Enable/disable create bill button
+        if (createBillBtn) {
+            createBillBtn.disabled = selectedProducts.length === 0;
+        }
+        
+        // Update hidden input with products data
+        if (productsDataInput) {
+            productsDataInput.value = JSON.stringify(selectedProducts);
+        }
+    };
+    
+    function clearProductInputs() {
+        if (productSearch) productSearch.value = '';
+        if (productQuantity) productQuantity.value = '';
+        if (productPrice) productPrice.value = '';
+        if (availableStockInfo) availableStockInfo.textContent = 'Select a product';
+        
+        currentProductData = null;
+        updateAddButton();
+    }
+    
+    function clearProductSelection() {
+        currentProductData = null;
+        if (productPrice) productPrice.value = '';
+        if (availableStockInfo) availableStockInfo.textContent = 'Select a product';
+        updateAddButton();
+    }
+    
+    function createMultiProductBill() {
+        if (selectedProducts.length === 0) {
+            showError('Please add at least one product to create a bill.');
+            return;
+        }
+        
+        // Show loading state
+        createBillBtn.disabled = true;
+        createBillBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Creating Bill...';
+        
+        // Submit the form
+        document.getElementById('multi-product-form').submit();
+    }
+    
+    // Global function to remove product (called from table buttons)
+    window.removeProduct = function(index) {
+        if (confirm('Are you sure you want to remove this product from the bill?')) {
+            selectedProducts.splice(index, 1);
+            updateSelectedProductsTable();
+            updateBillSummary();
+            showSuccess('Product removed from bill');
+        }
+    };
+    
+    function showSuccess(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-success alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="fas fa-check-circle me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.insertBefore(alert, container.firstChild);
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 3000);
+        }
+    }
+    
+    function showError(message) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-danger alert-dismissible fade show';
+        alert.innerHTML = `
+            <i class="fas fa-exclamation-triangle me-2"></i>${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const container = document.querySelector('.container-fluid');
+        if (container) {
+            container.insertBefore(alert, container.firstChild);
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+    }
+});
+
+function viewBillDetails(billId) {
+    console.log('Viewing bill details for ID:', billId);
+    
+    // Show loading state
+    const loadingModal = `
+        <div class="modal fade" id="loadingModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-body text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading bill details...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', loadingModal);
+    const loadingModalInstance = new bootstrap.Modal(document.getElementById('loadingModal'));
+    loadingModalInstance.show();
+    
+    fetch(`/bill-details/${billId}/`)
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Bill data received:', data);
+            
+            // Close loading modal
+            loadingModalInstance.hide();
+            document.getElementById('loadingModal').remove();
+            
+            let itemsHtml = '';
+            if (data.items && data.items.length > 0) {
+                data.items.forEach(item => {
+                    itemsHtml += `
+                        <tr>
+                            <td>${item.product_name}</td>
+                            <td>${item.quantity}</td>
+                            <td>₹${item.price}</td>
+                            <td>₹${item.total}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                itemsHtml = '<tr><td colspan="4" class="text-center">No items found</td></tr>';
+            }
+            
+            const modalHtml = `
+                <div class="modal fade" id="billModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header bg-primary text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-receipt me-2"></i>Bill Details - ${data.bill_number}
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <p><strong><i class="fas fa-calendar me-1"></i>Date:</strong> ${data.created_at}</p>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <p><strong><i class="fas fa-rupee-sign me-1"></i>Total Amount:</strong> <span class="text-success">₹${data.total_amount}</span></p>
+                                    </div>
+                                </div>
+                                
+                                <h6><i class="fas fa-list me-1"></i>Items:</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead class="table-dark">
+                                            <tr>
+                                                <th>Product</th>
+                                                <th>Quantity</th>
+                                                <th>Unit Price</th>
+                                                <th>Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${itemsHtml}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                                    <i class="fas fa-times me-1"></i>Close
+                                </button>
+                                <button type="button" class="btn btn-primary" onclick="printBill('${data.bill_number}')">
+                                    <i class="fas fa-print me-1"></i>Print Bill
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Remove existing modal if any
+            const existingModal = document.getElementById('billModal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
+            // Add new modal
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('billModal'));
+            modal.show();
+        })
+        .catch(error => {
+            console.error('Error fetching bill details:', error);
+            
+            // Close loading modal
+            const loadingModalEl = document.getElementById('loadingModal');
+            if (loadingModalEl) {
+                loadingModalInstance.hide();
+                loadingModalEl.remove();
+            }
+            
+            // Show error modal
+            const errorModal = `
+                <div class="modal fade" id="errorModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header bg-danger text-white">
+                                <h5 class="modal-title">
+                                    <i class="fas fa-exclamation-triangle me-2"></i>Error
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p><i class="fas fa-times-circle text-danger me-2"></i>Failed to load bill details.</p>
+                                <p class="text-muted">Error: ${error.message}</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.insertAdjacentHTML('beforeend', errorModal);
+            const errorModalInstance = new bootstrap.Modal(document.getElementById('errorModal'));
+            errorModalInstance.show();
+        });
+}
+
+function printBill(billNumber) {
+    // Get the bill modal content
+    const billModal = document.getElementById('billModal');
+    if (!billModal) {
+        alert('Please open bill details first');
+        return;
+    }
+    
+    // Extract bill data from modal
+    const modalBody = billModal.querySelector('.modal-body');
+    const billTitle = billModal.querySelector('.modal-title').textContent;
+    
+    // Generate QR code URL for INDIVIDUAL BILL (not ledger)
+    const qrCodeUrl = `${window.location.origin}/bill/${billNumber}/`;
+    
+    // Create print window
+    const printWindow = window.open('', '', 'height=600,width=800');
+    
+    printWindow.document.write(`
+        <html>
+        <head>
+            <title>Print Bill - ${billNumber}</title>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
+            <style>
+                @media print {
+                    body {
+                        background-color: white !important;
+                        color: black !important;
+                        margin: 0;
+                        padding: 20px;
+                    }
+                    .no-print {
+                        display: none !important;
+                    }
+                }
+                
+                body {
+                    background-color: white;
+                    font-family: Arial, sans-serif;
+                    padding: 30px;
+                    color: #000;
+                }
+                
+                .bill-header {
+                    text-align: center;
+                    margin-bottom: 30px;
+                    border-bottom: 3px solid #000;
+                    padding-bottom: 15px;
+                }
+                
+                .bill-header h1 {
+                    margin: 0;
+                    font-size: 28px;
+                    color: #000;
+                }
+                
+                .bill-header p {
+                    margin: 5px 0;
+                    color: #666;
+                }
+                
+                .bill-info {
+                    margin: 20px 0;
+                    padding: 15px;
+                    background-color: #f8f9fa;
+                    border: 1px solid #dee2e6;
+                }
+                
+                .bill-info p {
+                    margin: 5px 0;
+                    font-size: 14px;
+                }
+                
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 20px;
+                    background-color: white;
+                }
+                
+                th, td {
+                    border: 1px solid #000;
+                    padding: 12px;
+                    text-align: left;
+                }
+                
+                th {
+                    background-color: #343a40;
+                    color: white;
+                    font-weight: bold;
+                }
+                
+                tbody tr:nth-child(even) {
+                    background-color: #f8f9fa;
+                }
+                
+                .total-row {
+                    background-color: #e9ecef;
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                
+                .text-success {
+                    color: #198754 !important;
+                    font-weight: bold;
+                }
+                
+                .qr-section {
+                    margin-top: 30px;
+                    padding: 20px;
+                    border: 2px dashed #000;
+                    text-align: center;
+                    background-color: #f8f9fa;
+                }
+                
+                .qr-section h3 {
+                    margin: 0 0 10px 0;
+                    font-size: 16px;
+                    color: #000;
+                }
+                
+                .qr-section p {
+                    margin: 5px 0;
+                    font-size: 12px;
+                    color: #666;
+                }
+                
+                #qrcode {
+                    display: inline-block;
+                    margin: 10px 0;
+                }
+                
+                .footer {
+                    margin-top: 40px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #666;
+                    border-top: 1px solid #dee2e6;
+                    padding-top: 15px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="bill-header">
+                <h1>🏪 NeuroStock Inventory Management</h1>
+                <p>Smart Inventory & Billing System</p>
+                <p style="font-size: 18px; font-weight: bold; margin-top: 10px;">${billTitle}</p>
+            </div>
+            
+            <div class="bill-content">
+                ${modalBody.innerHTML}
+            </div>
+            
+            <div class="qr-section">
+                <h3>📱 Scan to View This Bill</h3>
+                <p>Scan this QR code to view complete details of this bill on your phone</p>
+                <div id="qrcode"></div>
+                <p style="font-weight: bold; margin-top: 10px;">Bill: ${billNumber} | Instant Access</p>
+            </div>
+            
+            <div class="footer">
+                <p>Thank you for your business!</p>
+                <p>This is a computer-generated bill. No signature required.</p>
+                <p>Generated on: ${new Date().toLocaleString()}</p>
+            </div>
+            
+            <script>
+                // Generate QR code after page loads
+                window.onload = function() {
+                    new QRCode(document.getElementById("qrcode"), {
+                        text: "${qrCodeUrl}",
+                        width: 128,
+                        height: 128,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                    
+                    // Print after QR code is generated
+                    setTimeout(function() {
+                        window.print();
+                    }, 500);
+                };
+            <\/script>
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+}
+
+// Send Bill Email Function
+function sendBillEmail(billId) {
+    const email = prompt('Enter shop owner email address:');
+    
+    if (!email) {
+        return;
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        alert('Please enter a valid email address');
+        return;
+    }
+    
+    if (!confirm(`Send bill to ${email}?`)) {
+        return;
+    }
+    
+    // Show loading
+    const btn = event.target.closest('button');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    // Send request
+    fetch(`/send-bill-email/${billId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        },
+        body: JSON.stringify({ email: email })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`✅ Email sent successfully to ${email}!\nVerification Code: ${data.verification_code}`);
+        } else {
+            alert(`❌ Error: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        alert(`❌ Error sending email: ${error.message}`);
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
+    });
+}
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Modern Tab Styling */
+.nav-tabs .nav-link {
+    border: none;
+    border-radius: 0;
+    color: #6c757d;
+    font-weight: 500;
+    padding: 12px 20px;
+    transition: all 0.3s ease;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #0d6efd;
+    background-color: #f8f9fa;
+}
+
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    background-color: #fff;
+    border-color: #dee2e6 #dee2e6 #fff;
+    border-bottom: 2px solid #0d6efd;
+}
+
+/* Card Hover Effects */
+.card {
+    transition: all 0.3s ease;
+    border: 1px solid #e9ecef;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* Button Styling */
+.btn {
+    transition: all 0.2s ease;
+}
+</style>
+{% endblock %}
+
+.btn:hover {
+    transform: scale(1.02);
+}
+
+/* Table Styling */
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Form Styling */
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Stats Cards */
+.card.border-primary:hover {
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.2);
+}
+
+.card.border-success:hover {
+    box-shadow: 0 6px 20px rgba(25, 135, 84, 0.2);
+}
+
+.card.border-info:hover {
+    box-shadow: 0 6px 20px rgba(13, 202, 240, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .nav-tabs .nav-link {
+        padding: 8px 12px;
+        font-size: 0.9rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    .btn-sm {
+        font-size: 0.8rem;
+        padding: 0.25rem 0.5rem;
+    }
+}
+
+/* Loading States */
+.btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Empty State Styling */
+.text-center.py-4 {
+    color: #6c757d;
+}
+
+.text-center.py-4 i {
+    opacity: 0.5;
+}
+</style>

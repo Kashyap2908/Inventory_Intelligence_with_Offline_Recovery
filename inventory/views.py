@@ -2257,6 +2257,18 @@ def update_order_from_notification(request):
     return redirect('inventory_dashboard')
 
 @login_required
+def billing_working(request):
+    """Working CSV billing page"""
+    return render(request, 'billing_working.html')
+
+
+@login_required
+def billing_test(request):
+    """Simple test page for CSV upload"""
+    return render(request, 'billing_simple.html')
+
+
+@login_required
 def billing(request):
     # Check if user has a profile
     if not hasattr(request.user, 'userprofile'):
@@ -2377,6 +2389,42 @@ def billing(request):
                 if not bill.verification_code:
                     bill.generate_verification_code()
                     bill.save()
+                
+                # Try to detect if this is a shop owner order and send email
+                # Check if any of the products match a pending shop owner order
+                from .models import RestockOrder, ShopOwner
+                shop_owner_email = None
+                shop_owner_name = None
+                
+                # Try to find a matching pending order
+                for product_data in products:
+                    try:
+                        product_obj = Product.objects.get(name=product_data['name'])
+                        # Find pending orders that include this product
+                        pending_orders = RestockOrder.objects.filter(
+                            status='pending'
+                        ).select_related('shop_owner')
+                        
+                        for order in pending_orders:
+                            # If we find a matching order, use that shop owner's email
+                            if order.shop_owner.email:
+                                shop_owner_email = order.shop_owner.email
+                                shop_owner_name = order.shop_owner.name
+                                shop_owner_obj = order.shop_owner
+                                break
+                        
+                        if shop_owner_email:
+                            break
+                    except:
+                        pass
+                
+                # Send email if we found a shop owner email
+                if shop_owner_email:
+                    email_success, email_message = send_bill_email(bill, shop_owner_obj)
+                    if email_success:
+                        messages.info(request, f'📧 Bill sent to {shop_owner_email} with verification code: {bill.verification_code}')
+                    else:
+                        messages.warning(request, f'⚠️ Email failed: {email_message}')
                 
                 # Show results
                 if insufficient_stock_products:
@@ -4330,3 +4378,609 @@ NeuroStock Inventory Management
         return JsonResponse({'success': False, 'error': 'Bill not found'})
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)})
+
+
+@login_required
+def load_complete_csv(request):
+    """
+    Load and parse complete CSV file, return JSON with shop owner and products
+    CSV Format:
+    Row 1: Shop Owner Name, Shop Name, Email
+    Row 2: Product Name, Category, Price, Current Stock, Restock Quantity
+    Row 3+: Product details
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid request method'})
+    
+    csv_file = request.FILES.get('complete_csv_file')
+    
+    if not csv_file:
+        return JsonResponse({'success': False, 'error': 'No CSV file uploaded'})
+    
+    if not csv_file.name.endswith('.csv'):
+        return JsonResponse({'success': False, 'error': 'File must be a CSV file'})
+    
+    try:
+        import csv
+        from io import StringIO
+        
+        # Read CSV file
+        content = csv_file.read().decode('utf-8-sig')
+        lines = [line.strip() for line in content.strip().split('\n') if line.strip()]
+        
+        print(f"DEBUG: Total lines: {len(lines)}")
+        for i, line in enumerate(lines[:5]):
+            print(f"DEBUG: Line {i}: '{line}'")
+        
+        if len(lines) < 2:
+            return JsonResponse({'success': False, 'error': 'CSV file is too short. Need at least 2 rows.'})
+        
+        # Parse shop owner info (first line)
+        csv_reader = csv.reader(StringIO(lines[0]))
+        shop_owner_row = next(csv_reader)
+        
+        print(f"DEBUG: Shop owner row: {shop_owner_row}")
+        
+        if len(shop_owner_row) < 3:
+            return JsonResponse({'success': False, 'error': f'Shop owner info incomplete. Found {len(shop_owner_row)} fields, need 3'})
+        
+        shop_owner_name = shop_owner_row[0].strip()
+        shop_name = shop_owner_row[1].strip()
+        shop_email = shop_owner_row[2].strip()
+        
+        print(f"DEBUG: Name: '{shop_owner_name}', Shop: '{shop_name}', Email: '{shop_email}'")
+        
+        if not shop_owner_name or not shop_name:
+            return JsonResponse({'success': False, 'error': 'Shop owner name and shop name are required'})
+        
+        if not shop_email:
+            return JsonResponse({'success': False, 'error': 'Email address is required'})
+        
+        # More flexible email validation
+        if '@' not in shop_email or '.' not in shop_email.split('@')[1]:
+            return JsonResponse({'success': False, 'error': f'Invalid email format: "{shop_email}". Must contain @ and domain with .'})
+        
+        # Check for common email issues
+        if shop_email.count('@') != 1:
+            return JsonResponse({'success': False, 'error': f'Invalid email: "{shop_email}". Must have exactly one @ symbol'})
+        
+        email_parts = shop_email.split('@')
+        if len(email_parts[0]) == 0 or len(email_parts[1]) == 0:
+            return JsonResponse({'success': False, 'error': f'Invalid email: "{shop_email}". Missing username or domain'})
+        
+        # Parse products (from line 2 onwards)
+        if len(lines) < 3:
+            return JsonResponse({'success': False, 'error': 'No product data found'})
+        
+        # Create CSV from product lines (header + data)
+        products_csv = '\n'.join(lines[1:])
+        csv_reader = csv.DictReader(StringIO(products_csv))
+        
+        print(f"DEBUG: Product headers: {csv_reader.fieldnames}")
+        
+        # Check for required columns
+        if not csv_reader.fieldnames:
+            return JsonResponse({'success': False, 'error': 'No product headers found'})
+        
+        # Look for quantity column (could be "Restock Quantity" or "quantity")
+        quantity_column = None
+        name_column = None
+        
+        for field in csv_reader.fieldnames:
+            field_lower = field.strip().lower()
+            if 'restock' in field_lower and 'quantity' in field_lower:
+                quantity_column = field
+            elif 'quantity' in field_lower:
+                quantity_column = field
+            elif 'product' in field_lower and 'name' in field_lower:
+                name_column = field
+            elif field_lower == 'name':
+                name_column = field
+        
+        if not quantity_column:
+            return JsonResponse({'success': False, 'error': 'Could not find quantity column'})
+        
+        if not name_column:
+            name_column = csv_reader.fieldnames[0]  # Use first column as product name
+        
+        print(f"DEBUG: Using name column: '{name_column}', quantity column: '{quantity_column}'")
+        
+        products_data = []
+        errors = []
+        
+        for row_num, row in enumerate(csv_reader, start=3):
+            product_name = row.get(name_column, '').strip()
+            quantity_str = row.get(quantity_column, '').strip()
+            
+            print(f"DEBUG: Row {row_num}: Product='{product_name}', Quantity='{quantity_str}'")
+            
+            if not product_name or not quantity_str:
+                continue
+            
+            try:
+                quantity = int(quantity_str)
+                if quantity <= 0:
+                    errors.append(f"Invalid quantity for {product_name}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid quantity '{quantity_str}' for {product_name}")
+                continue
+            
+            # Find product in database
+            try:
+                product = Product.objects.get(name__iexact=product_name)
+                available_stock = product.total_stock
+                
+                if available_stock < quantity:
+                    products_data.append({
+                        'id': product.id,
+                        'name': product.name,
+                        'quantity': quantity,
+                        'unitPrice': float(product.new_price),
+                        'total': float(product.new_price * quantity),
+                        'hasError': True,
+                        'error': f'Insufficient stock (Available: {available_stock})'
+                    })
+                else:
+                    products_data.append({
+                        'id': product.id,
+                        'name': product.name,
+                        'quantity': quantity,
+                        'unitPrice': float(product.new_price),
+                        'total': float(product.new_price * quantity),
+                        'hasError': False
+                    })
+                
+            except Product.DoesNotExist:
+                errors.append(f"Product '{product_name}' not found in inventory")
+                continue
+        
+        if not products_data:
+            return JsonResponse({'success': False, 'error': 'No valid products found', 'errors': errors})
+        
+        return JsonResponse({
+            'success': True,
+            'shop_owner': {
+                'name': shop_owner_name,
+                'shop_name': shop_name,
+                'email': shop_email
+            },
+            'products': products_data,
+            'errors': errors
+        })
+        
+    except Exception as e:
+        print(f"DEBUG: Exception: {str(e)}")
+        return JsonResponse({'success': False, 'error': f'Error processing CSV: {str(e)}'})
+
+
+@login_required
+def process_csv_shop_owner_order(request):
+    """
+    Process shop owner order from CSV data and send email automatically
+    """
+    if request.method != 'POST':
+        messages.error(request, '❌ Invalid request method')
+        return redirect('billing')
+    
+    try:
+        import json
+        from decimal import Decimal
+        
+        # Get shop owner and products data from form
+        shop_owner_json = request.POST.get('shop_owner_data')
+        products_json = request.POST.get('products_data')
+        
+        if not shop_owner_json or not products_json:
+            messages.error(request, '❌ Missing shop owner or products data')
+            return redirect('billing')
+        
+        shop_owner_data = json.loads(shop_owner_json)
+        products_data = json.loads(products_json)
+        
+        if not products_data:
+            messages.error(request, '❌ No products to process')
+            return redirect('billing')
+        
+        # Calculate total amount
+        total_amount = Decimal('0.00')
+        for product_data in products_data:
+            total_amount += Decimal(str(product_data['total']))
+        
+        # Create bill
+        bill_number = get_next_bill_number()
+        bill = SalesBill.objects.create(
+            bill_number=bill_number,
+            total_amount=total_amount,
+            created_by=request.user
+        )
+        
+        # Generate verification code
+        bill.generate_verification_code()
+        bill.save()
+        
+        # Auto-generate QR token
+        from .models import QRToken
+        user_profile = request.user.userprofile
+        qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+        
+        # Process each product
+        successful_products = []
+        errors = []
+        
+        for product_data in products_data:
+            try:
+                product = Product.objects.get(id=product_data['id'])
+                quantity = int(product_data['quantity'])
+                unit_price = Decimal(str(product_data['unitPrice']))
+                item_total = Decimal(str(product_data['total']))
+                
+                # Create bill item
+                SalesBillItem.objects.create(
+                    bill=bill,
+                    product=product,
+                    quantity=quantity,
+                    price=unit_price,
+                    total=item_total
+                )
+                
+                # AUTOMATIC INVENTORY DEDUCTION using FEFO
+                remaining_qty = quantity
+                from datetime import date
+                
+                stock_batches = product.expirystock_set.filter(
+                    quantity__gt=0,
+                    expiry_date__gte=date.today()
+                ).order_by('expiry_date')
+                
+                for batch in stock_batches:
+                    if remaining_qty <= 0:
+                        break
+                    
+                    if batch.quantity >= remaining_qty:
+                        batch.quantity -= remaining_qty
+                        remaining_qty = 0
+                    else:
+                        remaining_qty -= batch.quantity
+                        batch.quantity = 0
+                    
+                    batch.save()
+                
+                successful_products.append(f"{product.name} ({quantity} units)")
+                update_stock_notifications_for_product(product)
+                
+            except Exception as e:
+                errors.append(f"Error processing {product_data['name']}: {str(e)}")
+        
+        # Send email automatically
+        class TempShopOwner:
+            def __init__(self, name, shop_name, email):
+                self.name = name
+                self.shop_name = shop_name
+                self.email = email
+        
+        temp_owner = TempShopOwner(
+            shop_owner_data['name'],
+            shop_owner_data['shop_name'],
+            shop_owner_data['email']
+        )
+        
+        email_success, email_message = send_bill_email(bill, temp_owner)
+        
+        # Create notification
+        if successful_products:
+            Notification.objects.create(
+                title=f"CSV ORDER: {shop_owner_data['name']} - Bill #{bill.bill_number}",
+                message=f"CSV order processed and email sent!\n"
+                       f"Shop Owner: {shop_owner_data['name']} ({shop_owner_data['shop_name']})\n"
+                       f"Email: {shop_owner_data['email']}\n"
+                       f"Products: {', '.join(successful_products)}\n"
+                       f"Total Amount: ₹{bill.total_amount}\n"
+                       f"Verification Code: {bill.verification_code}\n"
+                       f"Email Status: {'✅ Sent' if email_success else '❌ Failed'}\n"
+                       f"Processed by: {request.user.first_name or request.user.username}",
+                notification_type='admin_message',
+                priority='medium',
+                target_user_role='inventory'
+            )
+        
+        # Success message
+        success_msg = (f'✅ Bill #{bill.bill_number} created for {shop_owner_data["name"]}! '
+                      f'Total: ₹{bill.total_amount} | {len(successful_products)} products')
+        
+        if email_success:
+            success_msg += f' | 📧 Email sent to {shop_owner_data["email"]} with code: {bill.verification_code}'
+            messages.success(request, success_msg)
+        else:
+            success_msg += f' | ⚠️ Email failed: {email_message}'
+            messages.warning(request, success_msg)
+        
+        if errors:
+            error_summary = f'⚠️ {len(errors)} item(s) had errors:'
+            error_details = '<br>'.join(errors[:5])
+            if len(errors) > 5:
+                error_details += f'<br>... and {len(errors) - 5} more errors'
+            messages.warning(request, f'{error_summary}<br>{error_details}')
+        
+        return redirect('billing')
+        
+    except Exception as e:
+        messages.error(request, f'❌ Error processing order: {str(e)}')
+        return redirect('billing')
+
+
+@login_required
+def process_complete_csv_order(request):
+    """
+    Process a complete CSV file with shop owner info and products in one file
+    CSV Format:
+    Row 1: Shop Owner Name,Shop Name,Email
+    Row 2: [Shop owner details]
+    Row 3: [Empty]
+    Row 4: product_name,quantity
+    Row 5+: [Product details]
+    """
+    if request.method != 'POST':
+        return redirect('billing')
+    
+    csv_file = request.FILES.get('complete_csv_file')
+    
+    if not csv_file:
+        messages.error(request, '❌ Please upload a CSV file')
+        return redirect('billing')
+    
+    if not csv_file.name.endswith('.csv'):
+        messages.error(request, '❌ File must be a CSV file')
+        return redirect('billing')
+    
+    try:
+        import csv
+        from decimal import Decimal
+        from io import TextIOWrapper, StringIO
+        
+        # Read CSV file
+        content = csv_file.read().decode('utf-8-sig')
+        lines = [line.strip() for line in content.strip().split('\n') if line.strip()]
+        
+        # DEBUG: Print what we got
+        print(f"DEBUG: Total lines: {len(lines)}")
+        for i, line in enumerate(lines[:5]):
+            print(f"DEBUG: Line {i}: '{line}'")
+        
+        if len(lines) < 3:
+            messages.error(request, '❌ CSV file is too short. Must have shop owner info and products.')
+            return redirect('billing')
+        
+        # Parse shop owner info using CSV reader for proper parsing
+        # Line 0: Headers (Shop Owner Name, Shop Name, Email)
+        # Line 1: Shop owner data
+        csv_reader = csv.reader(StringIO('\n'.join(lines[:2])))
+        rows = list(csv_reader)
+        
+        # DEBUG: Print parsed rows
+        print(f"DEBUG: Parsed rows: {rows}")
+        
+        if len(rows) < 2:
+            messages.error(request, '❌ CSV file format error. Need header and shop owner data.')
+            return redirect('billing')
+        
+        shop_owner_data = rows[1]
+        print(f"DEBUG: Shop owner data: {shop_owner_data}")
+        print(f"DEBUG: Length: {len(shop_owner_data)}")
+        
+        if len(shop_owner_data) < 3:
+            # Debug: show what was found
+            debug_info = f"Found {len(shop_owner_data)} field(s): {', '.join(shop_owner_data)}"
+            messages.error(request, f'❌ Shop owner info incomplete. Need: Name, Shop Name, Email. {debug_info}')
+            return redirect('billing')
+        
+        shop_owner_name = shop_owner_data[0].strip()
+        shop_name = shop_owner_data[1].strip()
+        shop_email = shop_owner_data[2].strip()
+        
+        # DEBUG: Print extracted values
+        print(f"DEBUG: Name: '{shop_owner_name}'")
+        print(f"DEBUG: Shop: '{shop_name}'")
+        print(f"DEBUG: Email: '{shop_email}'")
+        
+        # Validate email
+        if not shop_owner_name or not shop_name:
+            messages.error(request, '❌ Shop owner name and shop name are required')
+            return redirect('billing')
+        
+        if not shop_email or '@' not in shop_email:
+            messages.error(request, '❌ Invalid email address')
+            return redirect('billing')
+        
+        # Find where products start (after empty line or after shop owner data)
+        # Look for the product header line (product_name,quantity)
+        product_start_index = -1
+        for i in range(2, len(lines)):
+            if 'product_name' in lines[i].lower() and 'quantity' in lines[i].lower():
+                product_start_index = i
+                break
+        
+        if product_start_index == -1:
+            messages.error(request, '❌ Could not find product section. Must have header: product_name,quantity')
+            return redirect('billing')
+        
+        # Parse products (from product header onwards)
+        products_csv = '\n'.join(lines[product_start_index:])
+        csv_reader = csv.DictReader(StringIO(products_csv))
+        
+        # Validate product headers
+        required_headers = ['product_name', 'quantity']
+        fieldnames = [f.strip().lower() for f in csv_reader.fieldnames] if csv_reader.fieldnames else []
+        
+        if not all(header in fieldnames for header in required_headers):
+            messages.error(request, f'❌ Product section must have columns: {", ".join(required_headers)}')
+            return redirect('billing')
+        
+        # Parse products
+        products_data = []
+        errors = []
+        line_number = 4  # Starting from line 4 (after headers)
+        
+        for row in csv_reader:
+            line_number += 1
+            row_lower = {k.strip().lower(): v for k, v in row.items()}
+            product_name = row_lower.get('product_name', '').strip()
+            quantity_str = row_lower.get('quantity', '').strip()
+            
+            if not product_name or not quantity_str:
+                continue  # Skip empty lines
+            
+            try:
+                quantity = int(quantity_str)
+                if quantity <= 0:
+                    errors.append(f"Line {line_number}: Quantity must be positive for {product_name}")
+                    continue
+            except ValueError:
+                errors.append(f"Line {line_number}: Invalid quantity '{quantity_str}' for {product_name}")
+                continue
+            
+            # Find product
+            try:
+                product = Product.objects.get(name__iexact=product_name)
+                available_stock = product.total_stock
+                
+                if available_stock < quantity:
+                    errors.append(f"Line {line_number}: Insufficient stock for {product_name} (Available: {available_stock}, Requested: {quantity})")
+                    continue
+                
+                products_data.append({
+                    'name': product.name,
+                    'quantity': quantity,
+                    'unitPrice': float(product.new_price),
+                    'total': float(product.new_price * quantity)
+                })
+                
+            except Product.DoesNotExist:
+                errors.append(f"Line {line_number}: Product '{product_name}' not found")
+                continue
+        
+        # Show errors if no valid products
+        if not products_data:
+            error_message = "No valid products found.\n" + "\n".join(errors[:10])
+            messages.error(request, f'❌ {error_message}')
+            return redirect('billing')
+        
+        # Calculate total amount
+        total_amount = Decimal('0.00')
+        for product_data in products_data:
+            total_amount += Decimal(str(product_data['total']))
+        
+        # Create bill
+        bill_number = get_next_bill_number()
+        bill = SalesBill.objects.create(
+            bill_number=bill_number,
+            total_amount=total_amount,
+            created_by=request.user
+        )
+        
+        # Generate verification code
+        bill.generate_verification_code()
+        bill.save()
+        
+        # Auto-generate QR token
+        from .models import QRToken
+        user_profile = request.user.userprofile
+        qr_token, created = QRToken.objects.get_or_create(user_profile=user_profile)
+        
+        # Process each product
+        successful_products = []
+        
+        for product_data in products_data:
+            try:
+                product = Product.objects.get(name=product_data['name'])
+                quantity = int(product_data['quantity'])
+                unit_price = Decimal(str(product_data['unitPrice']))
+                item_total = Decimal(str(product_data['total']))
+                
+                # Create bill item
+                SalesBillItem.objects.create(
+                    bill=bill,
+                    product=product,
+                    quantity=quantity,
+                    price=unit_price,
+                    total=item_total
+                )
+                
+                # AUTOMATIC INVENTORY DEDUCTION using FEFO
+                remaining_qty = quantity
+                from datetime import date
+                
+                stock_batches = product.expirystock_set.filter(
+                    quantity__gt=0,
+                    expiry_date__gte=date.today()
+                ).order_by('expiry_date')
+                
+                for batch in stock_batches:
+                    if remaining_qty <= 0:
+                        break
+                    
+                    if batch.quantity >= remaining_qty:
+                        batch.quantity -= remaining_qty
+                        remaining_qty = 0
+                    else:
+                        remaining_qty -= batch.quantity
+                        batch.quantity = 0
+                    
+                    batch.save()
+                
+                successful_products.append(f"{product.name} ({quantity} units)")
+                update_stock_notifications_for_product(product)
+                
+            except Exception as e:
+                errors.append(f"Error processing {product_data['name']}: {str(e)}")
+        
+        # Send email
+        if shop_email:
+            # Create a temporary shop owner object for email
+            class TempShopOwner:
+                def __init__(self, name, shop_name, email):
+                    self.name = name
+                    self.shop_name = shop_name
+                    self.email = email
+            
+            temp_owner = TempShopOwner(shop_owner_name, shop_name, shop_email)
+            email_success, email_message = send_bill_email(bill, temp_owner)
+            
+            if email_success:
+                messages.info(request, f'📧 Bill sent to {shop_email} with verification code: {bill.verification_code}')
+            else:
+                messages.warning(request, f'⚠️ Email failed: {email_message}')
+        
+        # Create notification
+        if successful_products:
+            Notification.objects.create(
+                title=f"CSV ORDER: {shop_owner_name} - Bill #{bill.bill_number}",
+                message=f"Complete CSV order processed!\n"
+                       f"Shop Owner: {shop_owner_name} ({shop_name})\n"
+                       f"Email: {shop_email}\n"
+                       f"Products: {', '.join(successful_products)}\n"
+                       f"Total Amount: ₹{bill.total_amount}\n"
+                       f"Verification Code: {bill.verification_code}\n"
+                       f"Processed by: {request.user.first_name or request.user.username}",
+                notification_type='admin_message',
+                priority='medium',
+                target_user_role='inventory'
+            )
+        
+        # Success message
+        success_msg = (f'✅ Order from {shop_owner_name} processed! Bill #{bill.bill_number} created. '
+                      f'Total: ₹{bill.total_amount} | {len(successful_products)} products')
+        messages.success(request, success_msg)
+        
+        if errors:
+            error_summary = f'⚠️ {len(errors)} item(s) had errors:'
+            error_details = '<br>'.join(errors[:5])
+            if len(errors) > 5:
+                error_details += f'<br>... and {len(errors) - 5} more errors'
+            messages.warning(request, f'{error_summary}<br>{error_details}')
+        
+        return redirect('billing')
+        
+    except Exception as e:
+        messages.error(request, f'❌ Error processing CSV: {str(e)}')
+        return redirect('billing')
