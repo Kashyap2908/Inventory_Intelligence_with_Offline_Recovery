@@ -13,6 +13,29 @@
             min-height: 100vh;
             padding: 20px;
         }
+        
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .bill-container { border-radius: 10px; }
+            .bill-header { padding: 20px; }
+            .bill-header h1 { font-size: 1.5rem; }
+            .bill-header .bill-number { font-size: 1.2rem; }
+            .store-info, .bill-meta, .products-section, .qr-info { padding: 15px; }
+            .product-table { font-size: 0.85rem; }
+            .product-table th, .product-table td { padding: 10px 8px; }
+            .bill-summary { padding: 15px; border-radius: 8px; }
+            .summary-row { font-size: 1rem; }
+            .summary-total { font-size: 1.3rem; }
+            .print-button { bottom: 15px; right: 15px; padding: 12px 20px; font-size: 0.9rem; }
+        }
+        
+        @media (max-width: 576px) {
+            .bill-header h1 { font-size: 1.25rem; }
+            .product-table { font-size: 0.75rem; }
+            .product-table th, .product-table td { padding: 8px 5px; }
+            .product-table th:nth-child(4), .product-table td:nth-child(4) { display: none; }
+        }
         .bill-container {
             max-width: 800px;
             margin: 0 auto;

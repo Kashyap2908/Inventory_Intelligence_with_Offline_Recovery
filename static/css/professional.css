@@ -49,6 +49,24 @@ body {
     box-shadow: var(--shadow);
 }
 
+/* Fix navbar toggler visibility on mobile */
+.navbar-toggler {
+    border: 2px solid var(--primary-color) !important;
+    padding: 0.5rem 0.75rem !important;
+    background-color: rgba(37, 99, 235, 0.1) !important;
+}
+
+.navbar-toggler:focus {
+    box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.25) !important;
+    outline: none !important;
+}
+
+.navbar-toggler-icon {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%2837, 99, 235, 1%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2.5' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+    width: 1.5em !important;
+    height: 1.5em !important;
+}
+
 .navbar-brand {
     font-weight: 700;
     color: var(--primary-color) !important;
@@ -179,6 +197,35 @@ body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
+    /* Navbar mobile improvements */
+    .navbar-toggler {
+        border: 2px solid var(--primary-color) !important;
+        background-color: rgba(37, 99, 235, 0.15) !important;
+    }
+    
+    .navbar-collapse {
+        background: var(--white);
+        padding: 1rem;
+        margin-top: 0.5rem;
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+    }
+    
+    .nav-link {
+        padding: 0.75rem 1rem !important;
+        margin: 0.25rem 0 !important;
+    }
+    
+    .dropdown-menu {
+        border: none;
+        box-shadow: none;
+        padding: 0;
+    }
+    
+    .dropdown-item {
+        padding: 0.75rem 1rem;
+    }
+    
     .card-body {
         padding: 1rem;
     }
