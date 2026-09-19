@@ -12,6 +12,8 @@ ALLOWED_HOSTS = [
     '127.0.0.1',
     '10.55.157.192',
     '10.44.193.89',
+    '10.167.12.192',
+    '10.249.147.192',
     # Professional Local Domains
     'neurostock.local',  
     'neurostock-ai.local',
